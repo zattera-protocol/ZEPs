@@ -6,7 +6,7 @@ author: Zattera Core Team
 discussions-to: TBD
 status: Living
 type: Meta
-created: 2025-01-08
+created: 2025-11-08
 ---
 
 ## ZEP란 무엇인가?
