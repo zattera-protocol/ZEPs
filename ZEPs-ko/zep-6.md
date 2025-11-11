@@ -127,16 +127,16 @@ void comment_operation::validate() const
       }
 
       // 과도하게 큰 화이트리스트로 인한 남용 방지
-      FC_ASSERT(allowed_comment_accounts->size() <= STEEM_MAX_COMMENT_WHITELIST_SIZE,
+      FC_ASSERT(allowed_comment_accounts->size() <= ZATTERA_MAX_COMMENT_WHITELIST_SIZE,
                 "Whitelist cannot exceed ${max} accounts",
-                ("max", STEEM_MAX_COMMENT_WHITELIST_SIZE));
+                ("max", ZATTERA_MAX_COMMENT_WHITELIST_SIZE));
    }
 }
 ```
 
 **프로토콜 상수**:
 ```cpp
-#define STEEM_MAX_COMMENT_WHITELIST_SIZE 1000
+#define ZATTERA_MAX_COMMENT_WHITELIST_SIZE 1000
 ```
 
 #### 2. 댓글 객체 확장
@@ -164,13 +164,13 @@ class comment_object : public object<comment_object_type, comment_object>
 
 #### 3. 댓글 평가자 변경사항
 
-**파일**: `libraries/chain/steem_evaluator.cpp`
+**파일**: `libraries/chain/zattera_evaluator.cpp`
 
 ```cpp
 void comment_evaluator::do_apply(const comment_operation& o)
 {
    // 댓글인 경우(루트 게시물이 아닌), 권한 확인
-   if (o.parent_author != STEEM_ROOT_POST_PARENT)
+   if (o.parent_author != ZATTERA_ROOT_POST_PARENT)
    {
       const auto& parent = _db.get_comment(o.parent_author, o.parent_permlink);
 
@@ -570,7 +570,7 @@ BOOST_AUTO_TEST_CASE(comment_permission_whitelist_rejected)
    dan_reply.body = "Can I comment?";
 
    // 실패해야 함
-   STEEM_REQUIRE_THROW(
+   ZATTERA_REQUIRE_THROW(
       push_transaction(dan_reply, dan_private_key),
       fc::exception
    );
@@ -602,7 +602,7 @@ BOOST_AUTO_TEST_CASE(comment_permission_disabled)
    bob_reply.body = "Testing...";
 
    // 실패해야 함
-   STEEM_REQUIRE_THROW(
+   ZATTERA_REQUIRE_THROW(
       push_transaction(bob_reply, bob_private_key),
       fc::exception
    );
@@ -694,9 +694,9 @@ BOOST_AUTO_TEST_CASE(comment_permission_child_independence)
 
 - 브랜치: `feature/comment-permission-control`
 - 주요 파일:
-  - `libraries/protocol/include/steem/protocol/steem_operations.hpp`
-  - `libraries/chain/include/steem/chain/comment_object.hpp`
-  - `libraries/chain/steem_evaluator.cpp`
+  - `libraries/protocol/include/zattera/protocol/zattera_operations.hpp`
+  - `libraries/chain/include/zattera/chain/comment_object.hpp`
+  - `libraries/chain/zattera_evaluator.cpp`
   - `libraries/plugins/apis/database_api/database_api.cpp`
   - `tests/tests/comment_permission_tests.cpp`
 
