@@ -54,15 +54,15 @@ NFT-based verification addresses these issues:
 └──────────┬──────────┘
            │
            ▼
-┌─────────────────────┐      ┌──────────────────────┐
-│  Zattera Blockchain   │◄────►│  Oracle Service      │
-│                     │      │  (Off-chain)         │
-│  2. Verify          │      │                      │
-│     signature       │      │  3. Query ERC-721    │
-│                     │      │     ownerOf()        │
-│  4. Update witness  │      │     on EVM chain     │
-│     schedule        │      │                      │
-└─────────────────────┘      └──────────────────────┘
+┌──────────────────────┐      ┌──────────────────────┐
+│  Zattera Blockchain  │◄────►│  Oracle Service      │
+│                      │      │  (Off-chain)         │
+│  2. Verify           │      │                      │
+│     signature        │      │  3. Query ERC-721    │
+│                      │      │     ownerOf()        │
+│  4. Update witness   │      │     on EVM chain     │
+│     schedule         │      │                      │
+└──────────────────────┘      └──────────────────────┘
 ```
 
 ### Core Components
