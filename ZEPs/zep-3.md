@@ -52,7 +52,7 @@ The oracle is **not trustless** but achieves practical security through:
 ┌──────────────────────────────────────────────────────────────┐
 │                     Witness Node                             │
 │  ┌──────────────┐         ┌───────────────────────────────┐  │
-│  │   steemd     │◄───────►│   NFT Oracle Plugin           │  │
+│  │   zatterad   │◄───────►│   NFT Oracle Plugin           │  │
 │  │              │         │                               │  │
 │  │  - Receives  │         │  - Monitors proof operations  │  │
 │  │    proof ops │         │  - Queries EVM chains         │  │
@@ -85,7 +85,7 @@ The oracle implements the standard Appbase plugin interface.
 **Plugin Declaration:**
 
 ```cpp
-namespace steem { namespace plugins { namespace nft_oracle {
+namespace zattera { namespace plugins { namespace nft_oracle {
 
 class nft_oracle_plugin : public appbase::plugin<nft_oracle_plugin>
 {
@@ -114,7 +114,7 @@ class nft_oracle_plugin : public appbase::plugin<nft_oracle_plugin>
       std::unique_ptr<detail::nft_oracle_plugin_impl> my;
 };
 
-} } } // steem::plugins::nft_oracle
+} } } // zattera::plugins::nft_oracle
 ```
 
 ### Configuration Parameters
@@ -612,7 +612,7 @@ fc::variant rpc_call_with_retry(
 **Reasons:**
 - Direct access to database for status updates
 - Simplified deployment (single binary)
-- Shared configuration with steemd
+- Shared configuration with zatterad
 - Access to chain signals and events
 
 **Trade-off:** Less isolation than separate service
@@ -838,7 +838,7 @@ Available in feature branch:
 **Public NFT Ownership:**
 - All verifications are public on blockchain
 - Reveals witness's Ethereum addresses
-- Links Steem identity to Ethereum identity
+- Links Zattera identity to Ethereum identity
 
 **Mitigation:** This is intentional and acceptable for witness authorization use case
 
