@@ -76,7 +76,7 @@ created: 2025-11-11
 
 #### 1. 프로토콜 계층 변경
 
-**파일**: `libraries/protocol/include/steem/protocol/chain_parameters.hpp`
+**파일**: `libraries/protocol/include/zattera/protocol/chain_parameters.hpp`
 
 체인 매개변수 추가:
 ```cpp
@@ -165,7 +165,7 @@ class dynamic_global_property_object
 
    // 투표 임계값 통계
    uint32_t blocks_below_threshold = 0;
-   asset total_rewards_redirected = asset(0, STEEM_SYMBOL);
+   asset total_rewards_redirected = asset(0, ZATTERA_SYMBOL);
    fc::uint128_t last_participation_ratio = 0;  // 베이시스 포인트 (10000 = 100%)
 };
 ```
@@ -242,13 +242,13 @@ BOOST_AUTO_TEST_CASE( reward_reduction_below_threshold )
    total_network_vests = 1,000,000 VESTS
    percent_network_voting_threshold = 10000 (100%)
    total_voting_rshares = 300,000 (총 VESTS의 30%)
-   original_reward = 100 STEEM
+   original_reward = 100 ZATTERA
 
    // 예상
    participation_ratio = 300,000 / 1,000,000 = 0.3
    reduction_factor = 0.3
-   actual_content_reward = 100 * 0.3 = 30 STEEM
-   witness_bonus = 100 * 0.7 = 70 STEEM
+   actual_content_reward = 100 * 0.3 = 30 ZATTERA
+   witness_bonus = 100 * 0.7 = 70 ZATTERA
 }
 ```
 
@@ -262,13 +262,13 @@ BOOST_AUTO_TEST_CASE( no_reduction_above_threshold )
    percent_network_voting_threshold = 1000 (10%)
    required_voting = 10,000,000 VESTS
    total_voting_rshares = 15,000,000 (필요량의 150%)
-   original_reward = 100 STEEM
+   original_reward = 100 ZATTERA
 
    // 예상
    participation_ratio = 15,000,000 / 10,000,000 = 1.5 (1.0으로 제한)
    reduction_factor = 1.0
-   actual_content_reward = 100 STEEM (감소 없음)
-   witness_bonus = 0 STEEM
+   actual_content_reward = 100 ZATTERA (감소 없음)
+   witness_bonus = 0 ZATTERA
 }
 ```
 
@@ -282,13 +282,13 @@ BOOST_AUTO_TEST_CASE( exact_threshold_boundary )
    percent_network_voting_threshold = 5000 (50%)
    required_voting = 500,000 VESTS
    total_voting_rshares = 500,000 (정확히 필요량의 100%)
-   original_reward = 100 STEEM
+   original_reward = 100 ZATTERA
 
    // 예상
    participation_ratio = 500,000 / 500,000 = 1.0
    reduction_factor = 1.0
-   actual_content_reward = 100 STEEM
-   witness_bonus = 0 STEEM
+   actual_content_reward = 100 ZATTERA
+   witness_bonus = 0 ZATTERA
 }
 ```
 
@@ -298,9 +298,9 @@ BOOST_AUTO_TEST_CASE( exact_threshold_boundary )
 
 - 브랜치: `feature/voting-threshold-reward-reduction`
 - 주요 파일:
-  - `libraries/protocol/include/steem/protocol/chain_parameters.hpp`
+  - `libraries/protocol/include/zattera/protocol/chain_parameters.hpp`
   - `libraries/chain/database.cpp` (process_funds 함수)
-  - `libraries/chain/include/steem/chain/global_property_object.hpp`
+  - `libraries/chain/include/zattera/chain/global_property_object.hpp`
   - `tests/tests/reward_tests.cpp`
 
 ## 보안 고려사항

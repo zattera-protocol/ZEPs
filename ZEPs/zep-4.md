@@ -76,7 +76,7 @@ A new chain parameter `percent_network_voting_threshold` is introduced:
 
 #### 1. Protocol Layer Changes
 
-**File**: `libraries/protocol/include/steem/protocol/chain_parameters.hpp`
+**File**: `libraries/protocol/include/zattera/protocol/chain_parameters.hpp`
 
 Add chain parameter:
 ```cpp
@@ -165,7 +165,7 @@ class dynamic_global_property_object
 
    // Voting threshold statistics
    uint32_t blocks_below_threshold = 0;
-   asset total_rewards_redirected = asset(0, STEEM_SYMBOL);
+   asset total_rewards_redirected = asset(0, ZATTERA_SYMBOL);
    fc::uint128_t last_participation_ratio = 0;  // Basis points (10000 = 100%)
 };
 ```
@@ -242,13 +242,13 @@ BOOST_AUTO_TEST_CASE( reward_reduction_below_threshold )
    total_network_vests = 1,000,000 VESTS
    percent_network_voting_threshold = 10000 (100%)
    total_voting_rshares = 300,000 (30% of total VESTS)
-   original_reward = 100 STEEM
+   original_reward = 100 ZATTERA
 
    // Expected
    participation_ratio = 300,000 / 1,000,000 = 0.3
    reduction_factor = 0.3
-   actual_content_reward = 100 * 0.3 = 30 STEEM
-   witness_bonus = 100 * 0.7 = 70 STEEM
+   actual_content_reward = 100 * 0.3 = 30 ZATTERA
+   witness_bonus = 100 * 0.7 = 70 ZATTERA
 }
 ```
 
@@ -262,13 +262,13 @@ BOOST_AUTO_TEST_CASE( no_reduction_above_threshold )
    percent_network_voting_threshold = 1000 (10%)
    required_voting = 10,000,000 VESTS
    total_voting_rshares = 15,000,000 (150% of required)
-   original_reward = 100 STEEM
+   original_reward = 100 ZATTERA
 
    // Expected
    participation_ratio = 15,000,000 / 10,000,000 = 1.5 (capped at 1.0)
    reduction_factor = 1.0
-   actual_content_reward = 100 STEEM (no reduction)
-   witness_bonus = 0 STEEM
+   actual_content_reward = 100 ZATTERA (no reduction)
+   witness_bonus = 0 ZATTERA
 }
 ```
 
@@ -282,13 +282,13 @@ BOOST_AUTO_TEST_CASE( exact_threshold_boundary )
    percent_network_voting_threshold = 5000 (50%)
    required_voting = 500,000 VESTS
    total_voting_rshares = 500,000 (exactly 100% of required)
-   original_reward = 100 STEEM
+   original_reward = 100 ZATTERA
 
    // Expected
    participation_ratio = 500,000 / 500,000 = 1.0
    reduction_factor = 1.0
-   actual_content_reward = 100 STEEM
-   witness_bonus = 0 STEEM
+   actual_content_reward = 100 ZATTERA
+   witness_bonus = 0 ZATTERA
 }
 ```
 
@@ -298,9 +298,9 @@ A complete reference implementation is available in the feature branch:
 
 - Branch: `feature/voting-threshold-reward-reduction`
 - Key Files:
-  - `libraries/protocol/include/steem/protocol/chain_parameters.hpp`
+  - `libraries/protocol/include/zattera/protocol/chain_parameters.hpp`
   - `libraries/chain/database.cpp` (process_funds function)
-  - `libraries/chain/include/steem/chain/global_property_object.hpp`
+  - `libraries/chain/include/zattera/chain/global_property_object.hpp`
   - `tests/tests/reward_tests.cpp`
 
 ## Security Considerations
