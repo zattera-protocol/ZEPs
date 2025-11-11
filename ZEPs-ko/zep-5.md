@@ -248,7 +248,7 @@ FC_ASSERT(witness.signing_key != public_key_type(), "Not an active witness");
 const auto& witness_idx = _db.get_index<witness_index>().indices().get<by_vote_name>();
 uint32_t total_active = 0;
 for (auto itr = witness_idx.begin();
-     itr != witness_idx.end() && total_active < STEEM_MAX_WITNESSES;
+     itr != witness_idx.end() && total_active < ZATTERA_MAX_WITNESSES;
      ++itr)
 {
    if (itr->signing_key != public_key_type())
@@ -572,9 +572,9 @@ BOOST_AUTO_TEST_CASE(reward_multiplier_application)
 
 - 브랜치: `feature/reward-level-system`
 - 주요 파일:
-  - `libraries/protocol/include/steem/protocol/steem_operations.hpp`
-  - `libraries/chain/include/steem/chain/reward_level_objects.hpp`
-  - `libraries/chain/steem_evaluator.cpp`
+  - `libraries/protocol/include/zattera/protocol/zattera_operations.hpp`
+  - `libraries/chain/include/zattera/chain/reward_level_objects.hpp`
+  - `libraries/chain/zattera_evaluator.cpp`
   - `libraries/chain/database.cpp`
   - `tests/tests/reward_level_tests.cpp`
 
