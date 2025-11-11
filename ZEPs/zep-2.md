@@ -13,7 +13,7 @@ requires: 3
 
 ## Abstract
 
-This ZEP proposes a witness authorization system requiring block producers to prove ownership of ERC-721 NFTs on Ethereum-compatible chains. Witnesses must periodically submit cryptographic proofs linking their Steem accounts to Ethereum addresses owning registered NFTs. An oracle service verifies on-chain ownership before witnesses become eligible for block production.
+This ZEP proposes a witness authorization system requiring block producers to prove ownership of ERC-721 NFTs on Ethereum-compatible chains. Witnesses must periodically submit cryptographic proofs linking their Zattera accounts to Ethereum addresses owning registered NFTs. An oracle service verifies on-chain ownership before witnesses become eligible for block production.
 
 ## Motivation
 
@@ -55,7 +55,7 @@ NFT-based verification addresses these issues:
            │
            ▼
 ┌─────────────────────┐      ┌──────────────────────┐
-│  Steem Blockchain   │◄────►│  Oracle Service      │
+│  Zattera Blockchain   │◄────►│  Oracle Service      │
 │                     │      │  (Off-chain)         │
 │  2. Verify          │      │                      │
 │     signature       │      │  3. Query ERC-721    │
@@ -196,21 +196,21 @@ void nft_collection_approve_evaluator::do_apply(const nft_collection_approve_ope
       size_t approvals_from_top = 0;
 
       for (auto itr = witness_idx.begin();
-           itr != witness_idx.end() && top_witness_count < STEEM_MAX_WITNESSES;
+           itr != witness_idx.end() && top_witness_count < ZATTERA_MAX_WITNESSES;
            ++itr, ++top_witness_count)
       {
          if (c.approved_by.count(itr->owner) > 0)
             approvals_from_top++;
       }
 
-      c.active = (approvals_from_top >= (STEEM_MAX_WITNESSES / 2 + 1));
+      c.active = (approvals_from_top >= (ZATTERA_MAX_WITNESSES / 2 + 1));
    });
 }
 ```
 
 #### 2. Witness NFT Ownership Proof
 
-Witnesses submit proofs linking their Steem account to Ethereum address.
+Witnesses submit proofs linking their Zattera account to Ethereum address.
 
 **Operation**: `witness_nft_proof_operation`
 
@@ -266,12 +266,12 @@ struct witness_nft_proof_operation : public base_operation
 **Message Format for Signature**:
 
 ```
-"steem:<witness_account>:nft:<contract_address>:<token_id>:<timestamp>"
+"zattera:<witness_account>:nft:<contract_address>:<token_id>:<timestamp>"
 ```
 
 Example:
 ```
-"steem:alice:nft:0xBC4CA0EdA7647A8aB7C2061c2E118A18a936f13D:1234:1704672000"
+"zattera:alice:nft:0xBC4CA0EdA7647A8aB7C2061c2E118A18a936f13D:1234:1704672000"
 ```
 
 **Signature Verification**:
@@ -295,7 +295,7 @@ void witness_nft_proof_evaluator::do_apply(const witness_nft_proof_operation& o)
    FC_ASSERT(collection_itr->active, "NFT collection not active");
 
    // Verify Ethereum signature
-   string message = "steem:" + o.witness_account.operator string() +
+   string message = "zattera:" + o.witness_account.operator string() +
                     ":nft:" + o.contract_address +
                     ":" + o.token_id +
                     ":" + std::to_string(o.timestamp.sec_since_epoch());
@@ -601,7 +601,7 @@ get_collection_approvals_return get_collection_approvals(uint64_t collection_id)
 **Reasons**:
 - No bridge infrastructure required
 - Works with any wallet (MetaMask, etc.)
-- Provably links Steem account to ETH address
+- Provably links Zattera account to ETH address
 - Cost-effective (one signature per week)
 
 ### Alternative Approaches Considered
@@ -769,7 +769,7 @@ BOOST_AUTO_TEST_CASE(witness_nft_proof_submission)
    // ...
 
    // Alice generates Ethereum signature
-   string message = "steem:alice:nft:0xBC4C...:1234:1704672000";
+   string message = "zattera:alice:nft:0xBC4C...:1234:1704672000";
    string signature = sign_ethereum_message(alice_eth_key, message);
 
    // Submit proof
@@ -799,7 +799,7 @@ BOOST_AUTO_TEST_CASE(witness_nft_proof_submission)
 ```cpp
 BOOST_AUTO_TEST_CASE(ethereum_signature_recovery)
 {
-   string message = "steem:alice:nft:0xBC4CA0EdA7647A8aB7C2061c2E118A18a936f13D:1234:1704672000";
+   string message = "zattera:alice:nft:0xBC4CA0EdA7647A8aB7C2061c2E118A18a936f13D:1234:1704672000";
 
    // Sign with known Ethereum private key
    string eth_privkey = "0x1234...";
@@ -876,8 +876,8 @@ Available in feature branch:
 
 - Branch: `feature/nft-witness-verification`
 - Key Files:
-  - `libraries/protocol/include/steem/protocol/steem_operations.hpp`
-  - `libraries/chain/include/steem/chain/nft_verification_objects.hpp`
+  - `libraries/protocol/include/zattera/protocol/zattera_operations.hpp`
+  - `libraries/chain/include/zattera/chain/nft_verification_objects.hpp`
   - `libraries/chain/nft_evaluator.cpp`
   - `libraries/chain/database.cpp` (witness schedule)
   - `libraries/plugins/nft_oracle/` (See ZEP-3)

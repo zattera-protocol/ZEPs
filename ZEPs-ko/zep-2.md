@@ -13,7 +13,7 @@ requires: 3
 
 ## Abstract
 
-이 ZEP는 블록 생산자가 ERC-721 NFT의 소유권을 증명하도록 요구하는 증인 인증 시스템을 제안합니다. 증인은 Steem 계정을 등록된 NFT를 소유한 Ethereum 주소에 연결하는 암호화 증명을 주기적으로 제출해야 합니다. 오라클 서비스는 증인이 블록 생산 자격을 얻기 전에 온체인 소유권을 검증합니다.
+이 ZEP는 블록 생산자가 ERC-721 NFT의 소유권을 증명하도록 요구하는 증인 인증 시스템을 제안합니다. 증인은 Zattera 계정을 등록된 NFT를 소유한 Ethereum 주소에 연결하는 암호화 증명을 주기적으로 제출해야 합니다. 오라클 서비스는 증인이 블록 생산 자격을 얻기 전에 온체인 소유권을 검증합니다.
 
 ## Motivation
 
@@ -55,7 +55,7 @@ NFT 기반 검증은 이러한 문제를 해결합니다:
            │
            ▼
 ┌─────────────────────┐      ┌──────────────────────┐
-│  Steem Blockchain   │◄────►│  Oracle Service      │
+│  Zattera Blockchain   │◄────►│  Oracle Service      │
 │                     │      │  (Off-chain)         │
 │  2. Verify          │      │                      │
 │     signature       │      │  3. Query ERC-721    │
@@ -196,21 +196,21 @@ void nft_collection_approve_evaluator::do_apply(const nft_collection_approve_ope
       size_t approvals_from_top = 0;
 
       for (auto itr = witness_idx.begin();
-           itr != witness_idx.end() && top_witness_count < STEEM_MAX_WITNESSES;
+           itr != witness_idx.end() && top_witness_count < ZATTERA_MAX_WITNESSES;
            ++itr, ++top_witness_count)
       {
          if (c.approved_by.count(itr->owner) > 0)
             approvals_from_top++;
       }
 
-      c.active = (approvals_from_top >= (STEEM_MAX_WITNESSES / 2 + 1));
+      c.active = (approvals_from_top >= (ZATTERA_MAX_WITNESSES / 2 + 1));
    });
 }
 ```
 
 #### 2. 증인 NFT 소유권 증명
 
-증인이 Steem 계정을 Ethereum 주소에 연결하는 증명을 제출합니다.
+증인이 Zattera 계정을 Ethereum 주소에 연결하는 증명을 제출합니다.
 
 **Operation**: `witness_nft_proof_operation`
 
@@ -266,12 +266,12 @@ struct witness_nft_proof_operation : public base_operation
 **서명을 위한 메시지 형식**:
 
 ```
-"steem:<witness_account>:nft:<contract_address>:<token_id>:<timestamp>"
+"zattera:<witness_account>:nft:<contract_address>:<token_id>:<timestamp>"
 ```
 
 예시:
 ```
-"steem:alice:nft:0xBC4CA0EdA7647A8aB7C2061c2E118A18a936f13D:1234:1704672000"
+"zattera:alice:nft:0xBC4CA0EdA7647A8aB7C2061c2E118A18a936f13D:1234:1704672000"
 ```
 
 **서명 검증**:
@@ -295,7 +295,7 @@ void witness_nft_proof_evaluator::do_apply(const witness_nft_proof_operation& o)
    FC_ASSERT(collection_itr->active, "NFT collection not active");
 
    // Ethereum 서명 검증
-   string message = "steem:" + o.witness_account.operator string() +
+   string message = "zattera:" + o.witness_account.operator string() +
                     ":nft:" + o.contract_address +
                     ":" + o.token_id +
                     ":" + std::to_string(o.timestamp.sec_since_epoch());
@@ -601,7 +601,7 @@ get_collection_approvals_return get_collection_approvals(uint64_t collection_id)
 **이유**:
 - 브리지 인프라 불필요
 - 모든 지갑과 작동 (MetaMask 등)
-- Steem 계정을 ETH 주소에 증명 가능하게 연결
+- Zattera 계정을 ETH 주소에 증명 가능하게 연결
 - 비용 효율적 (주당 한 번의 서명)
 
 ### 고려된 대안 접근 방식
@@ -769,7 +769,7 @@ BOOST_AUTO_TEST_CASE(witness_nft_proof_submission)
    // ...
 
    // Alice가 Ethereum 서명 생성
-   string message = "steem:alice:nft:0xBC4C...:1234:1704672000";
+   string message = "zattera:alice:nft:0xBC4C...:1234:1704672000";
    string signature = sign_ethereum_message(alice_eth_key, message);
 
    // 증명 제출
@@ -799,7 +799,7 @@ BOOST_AUTO_TEST_CASE(witness_nft_proof_submission)
 ```cpp
 BOOST_AUTO_TEST_CASE(ethereum_signature_recovery)
 {
-   string message = "steem:alice:nft:0xBC4CA0EdA7647A8aB7C2061c2E118A18a936f13D:1234:1704672000";
+   string message = "zattera:alice:nft:0xBC4CA0EdA7647A8aB7C2061c2E118A18a936f13D:1234:1704672000";
 
    // 알려진 Ethereum 개인 키로 서명
    string eth_privkey = "0x1234...";
@@ -876,8 +876,8 @@ BOOST_AUTO_TEST_CASE(nft_proof_expiration)
 
 - Branch: `feature/nft-witness-verification`
 - 주요 파일:
-  - `libraries/protocol/include/steem/protocol/steem_operations.hpp`
-  - `libraries/chain/include/steem/chain/nft_verification_objects.hpp`
+  - `libraries/protocol/include/zattera/protocol/zattera_operations.hpp`
+  - `libraries/chain/include/zattera/chain/nft_verification_objects.hpp`
   - `libraries/chain/nft_evaluator.cpp`
   - `libraries/chain/database.cpp` (증인 스케줄)
   - `libraries/plugins/nft_oracle/` (ZEP-3 참조)
