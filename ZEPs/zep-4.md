@@ -12,7 +12,7 @@ created: 2025-11-11
 
 ## Abstract
 
-This ZEP proposes a mechanism to scale content rewards proportionally based on actual network voting participation. When total voting power falls below a configurable threshold, content rewards are reduced proportionally, with the remainder distributed to block producers (witnesses). This prevents disproportionate reward extraction during low-activity periods while incentivizing organic network growth.
+This ZEP proposes a mechanism to scale content rewards proportionally based on actual network voting participation. When total voting power falls below a configurable threshold, content rewards are reduced proportionally, with the remainder added to the vesting pool for distribution among all stakeholders. This prevents disproportionate reward extraction during low-activity periods while incentivizing organic network growth.
 
 ## Motivation
 
@@ -21,7 +21,6 @@ In the early stages of a blockchain network launch, a small number of users with
 1. **Unfair reward distribution** - Small voting activity receives full rewards designed for a mature network
 2. **Economic imbalance** - Early adopters can extract excessive value with minimal stake participation
 3. **Network health** - Rewards should reflect actual network engagement and usage
-4. **Witness incentivization** - Block producers need additional incentives during bootstrap phase
 
 Existing solutions do not adequately address these concerns. Without this mechanism, early-stage networks are vulnerable to reward pool manipulation and economic imbalance that can harm long-term sustainability.
 
@@ -55,7 +54,7 @@ For each block during reward distribution:
 
 3. Distribute rewards:
    actual_content_reward = original_reward × reduction_factor
-   witness_bonus = original_reward × (1 - reduction_factor)
+   vesting_pool_bonus = original_reward × (1 - reduction_factor)
 ```
 
 ### Chain Parameters
@@ -135,7 +134,7 @@ void database::process_funds()
       original_content_reward.symbol
    );
 
-   asset witness_bonus = asset(
+   asset vesting_pool_bonus = asset(
       original_content_reward.amount.value - actual_content_reward.amount.value,
       original_content_reward.symbol
    );
@@ -143,12 +142,11 @@ void database::process_funds()
    // Distribute actual_content_reward to content creators
    // ... existing reward distribution logic ...
 
-   // Add witness_bonus to current block witness
-   if (witness_bonus.amount > 0)
+   // Add vesting_pool_bonus to the vesting pool
+   if (vesting_pool_bonus.amount > 0)
    {
-      const auto& cwit = get_witness(dgpo.current_witness);
-      modify(get_account(cwpo.owner), [&](account_object& a) {
-         a.balance += witness_bonus;
+      modify(dgpo, [&](dynamic_global_property_object& p) {
+         p.total_vesting_fund_zattera += vesting_pool_bonus;
       });
    }
 }
@@ -195,10 +193,10 @@ get_voting_threshold_info_return get_voting_threshold_info();
 
 1. **Linear Scaling**: The reduction factor scales linearly with participation ratio for simplicity and predictability. Alternative non-linear curves were considered but rejected due to increased complexity.
 
-2. **Witness Bonus Distribution**: Redirected rewards go to block producers rather than being burned because:
-   - Incentivizes witnesses during critical bootstrap phase
+2. **Vesting Pool Distribution**: Redirected rewards go to the vesting pool rather than being burned because:
+   - Benefits all stakeholders proportionally through increased vesting pool value
    - Maintains total inflation rate predictability
-   - Aligns witness interests with network growth
+   - Incentivizes long-term holding and network commitment
 
 3. **Threshold as Percentage**: Using percentage of total VESTS allows the mechanism to scale naturally as the network grows without manual recalibration.
 
@@ -210,7 +208,7 @@ get_voting_threshold_info_return get_voting_threshold_info();
 
 2. **Time-based Decay**: Gradually reduce requirements over time - rejected because it doesn't reflect actual usage
 
-3. **Burned Rewards**: Burn reduced portion instead of giving to witnesses - rejected because it doesn't incentivize anyone to bootstrap the network
+3. **Burned Rewards**: Burn reduced portion instead of giving to vesting pool - rejected because it creates deflationary pressure and doesn't benefit stakeholders
 
 4. **Quadratic Scaling**: Non-linear reduction curve - rejected due to complexity and gas costs
 
@@ -227,7 +225,7 @@ This proposal introduces a consensus-breaking change and requires a hard fork.
 ### Impact on Existing Functionality
 
 - **Reward Calculations**: All content reward calculations are affected
-- **Witness Rewards**: Witnesses receive additional variable rewards during low-activity periods
+- **Vesting Pool**: Vesting pool receives additional variable rewards during low-activity periods
 - **API Responses**: Reward-related API calls will show adjusted amounts
 - **Wallet Displays**: UIs must account for variable reward rates
 
@@ -248,7 +246,7 @@ BOOST_AUTO_TEST_CASE( reward_reduction_below_threshold )
    participation_ratio = 300,000 / 1,000,000 = 0.3
    reduction_factor = 0.3
    actual_content_reward = 100 * 0.3 = 30 ZATTERA
-   witness_bonus = 100 * 0.7 = 70 ZATTERA
+   vesting_pool_bonus = 100 * 0.7 = 70 ZATTERA
 }
 ```
 
@@ -268,7 +266,7 @@ BOOST_AUTO_TEST_CASE( no_reduction_above_threshold )
    participation_ratio = 15,000,000 / 10,000,000 = 1.5 (capped at 1.0)
    reduction_factor = 1.0
    actual_content_reward = 100 ZATTERA (no reduction)
-   witness_bonus = 0 ZATTERA
+   vesting_pool_bonus = 0 ZATTERA
 }
 ```
 
@@ -288,7 +286,7 @@ BOOST_AUTO_TEST_CASE( exact_threshold_boundary )
    participation_ratio = 500,000 / 500,000 = 1.0
    reduction_factor = 1.0
    actual_content_reward = 100 ZATTERA
-   witness_bonus = 0 ZATTERA
+   vesting_pool_bonus = 0 ZATTERA
 }
 ```
 
@@ -307,11 +305,11 @@ A complete reference implementation is available in the feature branch:
 
 ### Potential Attack Vectors
 
-1. **Threshold Gaming**: Malicious actors could coordinate to keep participation just below threshold to maximize witness bonuses
+1. **Threshold Gaming**: Malicious actors could coordinate to keep participation just below threshold
    - Mitigation: Requires significant stake to meaningfully affect participation ratio
    - Monitoring: Track sudden drops in participation rates
 
-2. **Witness Collusion**: Witnesses could benefit from keeping threshold artificially high
+2. **Threshold Manipulation**: Malicious actors could attempt to manipulate threshold settings
    - Mitigation: Threshold adjustment requires witness consensus
    - Transparency: All parameter changes are publicly visible on-chain
 
@@ -321,7 +319,7 @@ A complete reference implementation is available in the feature branch:
 
 ### Economic Security
 
-1. **Inflation Consistency**: Total reward distribution (content + witness bonus) remains constant, maintaining predictable inflation
+1. **Inflation Consistency**: Total reward distribution (content + vesting pool bonus) remains constant, maintaining predictable inflation
 2. **No Burning**: All rewards are distributed to participants, preventing deflationary pressure
 3. **Gradual Transition**: Recommended threshold reduction schedule prevents economic shocks
 
