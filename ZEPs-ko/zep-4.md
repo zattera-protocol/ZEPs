@@ -12,7 +12,7 @@ created: 2025-11-11
 
 ## 개요
 
-본 ZEP는 실제 네트워크 투표 참여율을 기반으로 콘텐츠 보상을 비례적으로 조정하는 메커니즘을 제안합니다. 총 투표 참여량이 설정 가능한 임계값 이하로 떨어지면 콘텐츠 보상이 비례적으로 감소하며, 나머지는 블록 생성자(증인)에게 분배됩니다. 이는 낮은 활동 기간 동안 불균형한 보상 추출을 방지하면서 유기적인 네트워크 성장을 장려합니다.
+본 ZEP는 실제 네트워크 투표 참여율을 기반으로 콘텐츠 보상을 비례적으로 조정하는 메커니즘을 제안합니다. 총 투표 참여량이 설정 가능한 임계값 이하로 떨어지면 콘텐츠 보상이 비례적으로 감소하며, 나머지는 모든 이해관계자에게 분배되는 베스팅 풀에 추가됩니다. 이는 낮은 활동 기간 동안 불균형한 보상 추출을 방지하면서 유기적인 네트워크 성장을 장려합니다.
 
 ## 동기
 
@@ -21,7 +21,6 @@ created: 2025-11-11
 1. **불공정한 보상 분배** - 소규모 투표 활동이 성숙한 네트워크를 위한 전체 보상을 받음
 2. **경제적 불균형** - 얼리어답터가 최소한의 스테이크 참여로 과도한 가치를 추출할 수 있음
 3. **네트워크 건전성** - 보상은 실제 네트워크 참여도와 사용을 반영해야 함
-4. **증인 인센티브화** - 블록 생성자는 부트스트랩 단계에서 추가 인센티브가 필요함
 
 기존 솔루션은 이러한 문제를 적절히 해결하지 못합니다. 이 메커니즘이 없으면 초기 단계 네트워크는 보상 풀 조작과 장기적 지속 가능성을 해칠 수 있는 경제적 불균형에 취약합니다.
 
@@ -55,7 +54,7 @@ created: 2025-11-11
 
 3. 보상 분배:
    actual_content_reward = original_reward × reduction_factor
-   witness_bonus = original_reward × (1 - reduction_factor)
+   vesting_pool_bonus = original_reward × (1 - reduction_factor)
 ```
 
 ### 체인 매개변수
@@ -135,7 +134,7 @@ void database::process_funds()
       original_content_reward.symbol
    );
 
-   asset witness_bonus = asset(
+   asset vesting_pool_bonus = asset(
       original_content_reward.amount.value - actual_content_reward.amount.value,
       original_content_reward.symbol
    );
@@ -143,12 +142,11 @@ void database::process_funds()
    // actual_content_reward를 콘텐츠 제작자에게 분배
    // ... 기존 보상 분배 로직 ...
 
-   // witness_bonus를 현재 블록 증인에게 추가
-   if (witness_bonus.amount > 0)
+   // vesting_pool_bonus를 베스팅 풀에 추가
+   if (vesting_pool_bonus.amount > 0)
    {
-      const auto& cwit = get_witness(dgpo.current_witness);
-      modify(get_account(cwpo.owner), [&](account_object& a) {
-         a.balance += witness_bonus;
+      modify(dgpo, [&](dynamic_global_property_object& p) {
+         p.total_vesting_fund_zattera += vesting_pool_bonus;
       });
    }
 }
@@ -195,10 +193,10 @@ get_voting_threshold_info_return get_voting_threshold_info();
 
 1. **선형 스케일링**: 보상 감소율은 단순성과 예측 가능성을 위해 참여율에 선형적으로 비례합니다. 비선형 곡선도 고려되었으나 복잡성 증가로 인해 거부되었습니다.
 
-2. **증인 보너스 분배**: 재분배된 보상은 소각되는 대신 블록 생성자에게 전달됩니다:
-   - 중요한 부트스트랩 단계에서 증인을 인센티브화
+2. **베스팅 풀 분배**: 재분배된 보상은 소각되는 대신 베스팅 풀로 전달됩니다:
+   - 베스팅 풀 가치 증가를 통해 모든 이해관계자에게 비례적으로 혜택 제공
    - 총 인플레이션율 예측 가능성 유지
-   - 증인의 이익을 네트워크 성장과 일치시킴
+   - 장기 보유 및 네트워크 헌신 인센티브화
 
 3. **백분율로서의 임계값**: 총 VESTS의 백분율 사용은 메커니즘이 수동 재보정 없이 네트워크 성장에 따라 자연스럽게 확장되도록 합니다.
 
@@ -210,7 +208,7 @@ get_voting_threshold_info_return get_voting_threshold_info();
 
 2. **시간 기반 감소**: 시간 경과에 따라 요구사항 점진적 감소 - 실제 사용을 반영하지 않아 거부됨
 
-3. **보상 소각**: 감소된 부분을 증인에게 주는 대신 소각 - 네트워크 부트스트랩을 인센티브화하지 않아 거부됨
+3. **보상 소각**: 감소된 부분을 베스팅 풀에 주는 대신 소각 - 디플레이션 압력을 생성하고 이해관계자에게 혜택을 주지 않아 거부됨
 
 4. **이차 스케일링**: 비선형 감소 곡선 - 복잡성과 가스 비용으로 인해 거부됨
 
@@ -227,7 +225,7 @@ get_voting_threshold_info_return get_voting_threshold_info();
 ### 기존 기능에 미치는 영향
 
 - **보상 계산**: 모든 콘텐츠 보상 계산이 영향을 받음
-- **증인 보상**: 증인은 낮은 활동 기간 동안 추가 변동 보상을 받음
+- **베스팅 풀**: 베스팅 풀은 낮은 활동 기간 동안 추가 변동 보상을 받음
 - **API 응답**: 보상 관련 API 호출이 조정된 금액을 표시함
 - **지갑 디스플레이**: UI는 변동 보상율을 고려해야 함
 
@@ -248,7 +246,7 @@ BOOST_AUTO_TEST_CASE( reward_reduction_below_threshold )
    participation_ratio = 300,000 / 1,000,000 = 0.3
    reduction_factor = 0.3
    actual_content_reward = 100 * 0.3 = 30 ZATTERA
-   witness_bonus = 100 * 0.7 = 70 ZATTERA
+   vesting_pool_bonus = 100 * 0.7 = 70 ZATTERA
 }
 ```
 
@@ -268,7 +266,7 @@ BOOST_AUTO_TEST_CASE( no_reduction_above_threshold )
    participation_ratio = 15,000,000 / 10,000,000 = 1.5 (1.0으로 제한)
    reduction_factor = 1.0
    actual_content_reward = 100 ZATTERA (감소 없음)
-   witness_bonus = 0 ZATTERA
+   vesting_pool_bonus = 0 ZATTERA
 }
 ```
 
@@ -288,7 +286,7 @@ BOOST_AUTO_TEST_CASE( exact_threshold_boundary )
    participation_ratio = 500,000 / 500,000 = 1.0
    reduction_factor = 1.0
    actual_content_reward = 100 ZATTERA
-   witness_bonus = 0 ZATTERA
+   vesting_pool_bonus = 0 ZATTERA
 }
 ```
 
@@ -307,11 +305,11 @@ BOOST_AUTO_TEST_CASE( exact_threshold_boundary )
 
 ### 잠재적 공격 벡터
 
-1. **임계값 게이밍**: 악의적인 행위자들이 증인 보너스를 최대화하기 위해 참여를 임계값 바로 아래로 유지하도록 조율할 수 있음
+1. **임계값 게이밍**: 악의적인 행위자들이 참여를 임계값 바로 아래로 유지하도록 조율할 수 있음
    - 완화: 참여율에 의미 있는 영향을 주려면 상당한 스테이크가 필요함
    - 모니터링: 참여율의 급격한 하락 추적
 
-2. **증인 담합**: 증인들이 임계값을 인위적으로 높게 유지하여 이익을 얻을 수 있음
+2. **임계값 조작**: 악의적인 행위자들이 임계값 설정을 조작하려 시도할 수 있음
    - 완화: 임계값 조정은 증인 합의가 필요함
    - 투명성: 모든 매개변수 변경은 온체인에서 공개적으로 확인 가능함
 
@@ -321,7 +319,7 @@ BOOST_AUTO_TEST_CASE( exact_threshold_boundary )
 
 ### 경제적 보안
 
-1. **인플레이션 일관성**: 총 보상 분배(콘텐츠 + 증인 보너스)는 일정하게 유지되어 예측 가능한 인플레이션 유지
+1. **인플레이션 일관성**: 총 보상 분배(콘텐츠 + 베스팅 풀 보너스)는 일정하게 유지되어 예측 가능한 인플레이션 유지
 2. **소각 없음**: 모든 보상이 참여자에게 분배되어 디플레이션 압력 방지
 3. **점진적 전환**: 권장되는 임계값 감소 일정이 경제적 충격 방지
 
