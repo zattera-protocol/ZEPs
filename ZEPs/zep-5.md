@@ -400,7 +400,7 @@ get_reward_multiplier_proposals_return get_reward_multiplier_proposals();
 
 ## Backwards Compatibility
 
-This ZIP introduces consensus-breaking changes requiring a hard fork.
+This ZEP introduces consensus-breaking changes requiring a hard fork.
 
 ### Migration Strategy
 
@@ -604,7 +604,7 @@ Reference implementation available in feature branch:
 **Level Farming**
 - Risk: Users game system to obtain high levels
 - Mitigation: Witness judgment + justification requirements
-- Future: Automated eligibility criteria (ZIP extension)
+- Future: Automated eligibility criteria (ZEP extension)
 
 ### Technical Vulnerabilities
 

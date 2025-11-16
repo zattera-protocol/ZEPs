@@ -400,7 +400,7 @@ get_reward_multiplier_proposals_return get_reward_multiplier_proposals();
 
 ## 하위 호환성
 
-본 ZIP은 하드포크가 필요한 합의 파괴 변경 사항을 도입합니다.
+본 제안은 합의를 깨는 변경을 도입하며 하드포크가 필요합니다.
 
 ### 마이그레이션 전략
 
@@ -604,7 +604,7 @@ BOOST_AUTO_TEST_CASE(reward_multiplier_application)
 **레벨 파밍**
 - 위험: 사용자가 높은 레벨을 얻기 위해 시스템 악용
 - 완화: 증인 판단 + 정당화 요구사항
-- 미래: 자동화된 자격 기준 (ZIP 확장)
+- 미래: 자동화된 자격 기준 (ZEP 확장)
 
 ### 기술적 취약점
 

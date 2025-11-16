@@ -244,7 +244,7 @@ Post (Alice, whitelist: [Bob, Charlie])
 - Simpler implementation (no update logic needed)
 - Clear expectations for commenters
 
-**Future Enhancement**: Separate update operation could be added in future ZIP.
+**Future Enhancement**: Separate update operation could be added in future ZEP.
 
 #### Edit Behavior
 
@@ -366,7 +366,7 @@ get_comment_permissions_return database_api::get_comment_permissions(
 
 **Trade-off**: Less flexibility for authors who want to adjust later
 
-**Future**: Could add update operation in later ZIP if demand exists
+**Future**: Could add update operation in later ZEP if demand exists
 
 #### 4. No Nested Restrictions
 
@@ -409,7 +409,7 @@ get_comment_permissions_return database_api::get_comment_permissions(
 - Criteria can be gameable
 - Still need whitelist for fine-grained control
 
-**Future**: Could be separate ZIP building on this one
+**Future**: Could be separate ZEP building on this one
 
 #### B. Reputation Threshold
 
@@ -435,7 +435,7 @@ get_comment_permissions_return database_api::get_comment_permissions(
 
 ## Backwards Compatibility
 
-This ZIP introduces a consensus-breaking change requiring a hard fork.
+This ZEP introduces a consensus-breaking change requiring a hard fork.
 
 ### Compatibility Analysis
 
@@ -768,7 +768,7 @@ Available in feature branch:
 
 ## Future Enhancements
 
-Potential extensions for future ZIPs:
+Potential extensions for future ZEPs:
 
 ### 1. Permission Updates
 
