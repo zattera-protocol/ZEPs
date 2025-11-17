@@ -1,3 +1,11 @@
+<div align="center">
+
+![Zattera 개선 제안 (ZEPs)](assets/images/main-banner.png)
+
+[English](README.md)
+
+</div>
+
 # Zattera 개선 제안 (ZEPs)
 
 이 저장소는 Zattera 블록체인 프로토콜에 대한 모든 Zattera 개선 제안(ZEP)을 포함합니다.

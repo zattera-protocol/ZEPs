@@ -1,3 +1,11 @@
+<div align="center">
+
+![Zattera Enhancement Proposals (ZEPs)](assets/images/main-banner.png)
+
+[한국어](README.ko.md)
+
+</div>
+
 # Zattera Enhancement Proposals (ZEPs)
 
 This repository contains all Zattera Enhancement Proposals (ZEPs) for the Zattera blockchain protocol.
