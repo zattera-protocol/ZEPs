@@ -305,7 +305,27 @@ void witness_nft_proof_evaluator::do_apply(const witness_nft_proof_operation& o)
    FC_ASSERT(to_lowercase(recovered_address) == to_lowercase(o.eth_address),
              "Signature verification failed");
 
-   // 증명 객체 생성 또는 업데이트
+   // 다른 증인이 이미 이 NFT를 사용 중인지 확인
+   const auto& token_idx = _db.get_index<witness_nft_proof_index>()
+                               .indices().get<by_token_identity>();
+   auto existing_token = token_idx.find(
+      boost::make_tuple(o.contract_address, o.token_id, o.chain_id)
+   );
+
+   if (existing_token != token_idx.end() &&
+       existing_token->witness_account != o.witness_account)
+   {
+      // 다른 증인이 동일한 NFT를 요구하는 경우
+      // NFT 소유권이 이전되었음을 나타냄 - 기존 증명 무효화
+      _db.modify(*existing_token, [&](witness_nft_proof_object& p)
+      {
+         p.verification_status = witness_nft_proof_object::failed;
+         p.verification_details = "NFT transferred to " + o.witness_account;
+         p.verification_timestamp = _db.head_block_time();
+      });
+   }
+
+   // 현재 증인의 증명 객체 생성 또는 업데이트
    const auto& proof_idx = _db.get_index<witness_nft_proof_index>()
                                .indices().get<by_witness>();
    auto proof_itr = proof_idx.find(o.witness_account);
@@ -604,6 +624,33 @@ get_collection_approvals_return get_collection_approvals(uint64_t collection_id)
 - Zattera 계정을 ETH 주소에 증명 가능하게 연결
 - 비용 효율적 (주당 한 번의 서명)
 
+#### 7. NFT 양도 처리
+
+**결정**: 새로운 증인이 동일한 NFT를 요구할 때 이전 증인의 증명을 자동으로 무효화
+
+**동작 방식**:
+증인 B가 증인 A가 현재 보유한 NFT에 대한 증명을 제출할 때:
+1. 증인 A의 증명이 즉시 `failed`로 표시됨
+2. 검증 세부 정보 업데이트: "NFT transferred to [witness_B]"
+3. 증인 A가 블록 생성 자격 상실
+4. 증인 B의 증명이 오라클 검증을 위해 `pending` 상태로 진입
+5. 오라클이 소유권을 확인한 후에만 증인 B가 자격 획득
+
+**이유**:
+- **즉각적인 보호**: 증인 A가 양도된 NFT로 블록 생성을 계속하는 것을 방지
+- **무신뢰 전환**: 수동 개입 불필요
+- **명확한 소유권**: 하나의 NFT는 한 번에 하나의 증인만 인증 가능
+- **감사 추적**: 실패한 증명이 소유권 이전 기록을 남김
+- **DoS 방지**: 오라클이 여전히 자격 부여 전에 새 요구를 검증
+
+**트레이드오프**:
+- **공격 벡터**: 악의적인 증인이 다른 증인의 NFT를 허위로 요구할 수 있음
+  - 완화책: 오라클 검증 실패, 실제 피해 없음
+  - 공격자의 오라클 검증까지 원래 증인은 자격 유지
+- **경쟁 조건**: 오라클 검증 기간 중 NFT가 판매되는 경우
+  - 완화책: 7일 재검증 주기로 소유권 변경 감지
+  - 두 증인 모두 오라클 확인까지 일시적으로 자격 상실 가능
+
 ### 고려된 대안 접근 방식
 
 #### A. 크로스체인 브리지
@@ -870,6 +917,152 @@ BOOST_AUTO_TEST_CASE(nft_proof_expiration)
 }
 ```
 
+### 테스트 케이스 7: 증인 간 NFT 양도
+
+```cpp
+BOOST_AUTO_TEST_CASE(nft_transfer_between_witnesses)
+{
+   ACTORS((alice)(bob))
+   witness_create("alice", ...);
+   witness_create("bob", ...);
+
+   // 컬렉션 등록
+   auto collection_id = register_and_approve_collection("BAYC", "0xBC4C...", 1);
+
+   // Alice가 NFT #1234에 대한 증명 제출
+   string alice_message = "zattera:alice:nft:0xBC4C...:1234:1704672000";
+   string alice_signature = sign_ethereum_message(alice_eth_key, alice_message);
+
+   witness_nft_proof_operation alice_proof;
+   alice_proof.witness_account = "alice";
+   alice_proof.eth_address = "0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb";
+   alice_proof.contract_address = "0xBC4CA0EdA7647A8aB7C2061c2E118A18a936f13D";
+   alice_proof.token_id = "1234";
+   alice_proof.chain_id = 1;
+   alice_proof.eth_signature = alice_signature;
+   alice_proof.timestamp = fc::time_point_sec(1704672000);
+
+   push_transaction(alice_proof, alice_key);
+
+   // Alice의 증명 생성 확인
+   const auto& proof_idx = db->get_index<witness_nft_proof_index>()
+                               .indices().get<by_witness>();
+   auto alice_proof_obj = proof_idx.find("alice");
+   BOOST_REQUIRE(alice_proof_obj != proof_idx.end());
+   BOOST_REQUIRE_EQUAL(alice_proof_obj->verification_status,
+                      witness_nft_proof_object::pending);
+
+   // Alice에 대한 오라클 검증 시뮬레이션
+   db->modify(*alice_proof_obj, [&](witness_nft_proof_object& p) {
+      p.verification_status = witness_nft_proof_object::verified;
+      p.verification_details = "Oracle confirmed";
+   });
+
+   // Alice는 이제 블록 생성 자격 있음
+   BOOST_REQUIRE(db->validate_witness_nft_ownership("alice"));
+
+   // NFT 양도: Bob이 동일한 NFT에 대한 증명 제출
+   string bob_message = "zattera:bob:nft:0xBC4C...:1234:1704672100";
+   string bob_signature = sign_ethereum_message(bob_eth_key, bob_message);
+
+   witness_nft_proof_operation bob_proof;
+   bob_proof.witness_account = "bob";
+   bob_proof.eth_address = "0x9876543210fedcba9876543210fedcba98765432";
+   bob_proof.contract_address = "0xBC4CA0EdA7647A8aB7C2061c2E118A18a936f13D";
+   bob_proof.token_id = "1234";  // 동일한 NFT
+   bob_proof.chain_id = 1;
+   bob_proof.eth_signature = bob_signature;
+   bob_proof.timestamp = fc::time_point_sec(1704672100);
+
+   push_transaction(bob_proof, bob_key);
+
+   // Alice의 증명 무효화 확인
+   alice_proof_obj = proof_idx.find("alice");
+   BOOST_REQUIRE(alice_proof_obj != proof_idx.end());
+   BOOST_REQUIRE_EQUAL(alice_proof_obj->verification_status,
+                      witness_nft_proof_object::failed);
+   BOOST_REQUIRE(alice_proof_obj->verification_details.find("transferred to bob")
+                 != string::npos);
+
+   // Alice는 더 이상 자격 없음
+   BOOST_REQUIRE(!db->validate_witness_nft_ownership("alice"));
+
+   // Bob의 증명은 대기 중
+   auto bob_proof_obj = proof_idx.find("bob");
+   BOOST_REQUIRE(bob_proof_obj != proof_idx.end());
+   BOOST_REQUIRE_EQUAL(bob_proof_obj->verification_status,
+                      witness_nft_proof_object::pending);
+
+   // Bob은 아직 자격 없음 (오라클 대기 중)
+   BOOST_REQUIRE(!db->validate_witness_nft_ownership("bob"));
+
+   // Bob에 대한 오라클 검증 시뮬레이션
+   db->modify(*bob_proof_obj, [&](witness_nft_proof_object& p) {
+      p.verification_status = witness_nft_proof_object::verified;
+      p.verification_details = "Oracle confirmed";
+   });
+
+   // Bob은 이제 자격 있음
+   BOOST_REQUIRE(db->validate_witness_nft_ownership("bob"));
+}
+```
+
+### 테스트 케이스 8: 허위 NFT 요구 감지
+
+```cpp
+BOOST_AUTO_TEST_CASE(false_nft_claim)
+{
+   ACTORS((alice)(malicious))
+   witness_create("alice", ...);
+   witness_create("malicious", ...);
+
+   // Alice는 검증된 증명 있음
+   auto collection_id = register_and_approve_collection("BAYC", "0xBC4C...", 1);
+   create_verified_nft_proof("alice", "0x742d35Cc...", "0xBC4C...", "1234", 1);
+
+   BOOST_REQUIRE(db->validate_witness_nft_ownership("alice"));
+
+   // 악의적인 증인이 Alice의 NFT를 허위로 요구
+   string fake_message = "zattera:malicious:nft:0xBC4C...:1234:1704672200";
+   string fake_signature = sign_ethereum_message(malicious_eth_key, fake_message);
+
+   witness_nft_proof_operation fake_proof;
+   fake_proof.witness_account = "malicious";
+   fake_proof.eth_address = "0xbadbadbadbadbadbadbadbadbadbadbadbadbad";
+   fake_proof.contract_address = "0xBC4CA0EdA7647A8aB7C2061c2E118A18a936f13D";
+   fake_proof.token_id = "1234";  // Alice의 NFT
+   fake_proof.chain_id = 1;
+   fake_proof.eth_signature = fake_signature;
+   fake_proof.timestamp = fc::time_point_sec(1704672200);
+
+   push_transaction(fake_proof, malicious_key);
+
+   // Alice의 증명 무효화됨 (일시적으로)
+   const auto& proof_idx = db->get_index<witness_nft_proof_index>()
+                               .indices().get<by_witness>();
+   auto alice_proof = proof_idx.find("alice");
+   BOOST_REQUIRE_EQUAL(alice_proof->verification_status,
+                      witness_nft_proof_object::failed);
+
+   // 악의적인 증명은 대기 중
+   auto mal_proof = proof_idx.find("malicious");
+   BOOST_REQUIRE_EQUAL(mal_proof->verification_status,
+                      witness_nft_proof_object::pending);
+
+   // 오라클 검증 시뮬레이션 - 허위 요구 감지
+   db->modify(*mal_proof, [&](witness_nft_proof_object& p) {
+      p.verification_status = witness_nft_proof_object::failed;
+      p.verification_details = "Oracle: actual owner is 0x742d35Cc...";
+   });
+
+   // 악의적인 증인은 자격 없음
+   BOOST_REQUIRE(!db->validate_witness_nft_ownership("malicious"));
+
+   // Alice는 자격을 되찾기 위해 증명을 재제출해야 함
+   BOOST_REQUIRE(!db->validate_witness_nft_ownership("alice"));
+}
+```
+
 ## Reference Implementation
 
 기능 브랜치에서 사용 가능:
@@ -927,6 +1120,26 @@ BOOST_AUTO_TEST_CASE(nft_proof_expiration)
   - 7일 증명 유효성으로 지속적인 소유권 필요
   - 빈번한 재검증으로 전송 감지
   - NFT 스테이킹 (향후 개선)
+
+**증인 간 NFT 양도**
+- 위험: 증인이 제한을 우회하기 위해 다른 증인에게 NFT 판매
+- 동작: 이전 증인의 증명 자동 무효화
+- 영향:
+  - 이전 증인은 새로운 요구 시 즉시 자격 상실
+  - 새 증인은 오라클 검증 후에만 자격 획득
+  - 해당 NFT로 두 증인 모두 블록을 생성할 수 없는 일시적인 공백 발생
+- 보호: 오라클 검증이 합법적인 소유권 이전 보장
+
+**허위 NFT 요구 공격**
+- 위험: 악의적인 증인이 다른 증인의 NFT를 소유하지 않고 요구
+- 완화:
+  - 유효하지 않은 증명은 오라클 검증 실패
+  - 원래 증인의 증명은 서명 검증 후에만 무효화됨
+  - 공격자는 아무 이득 없음 (오라클이 가짜 요구 거부)
+  - 실패한 증명 시도가 모니터링을 위해 기록됨
+- 트레이드오프: 원래 증인 증명이 실패로 표시되는 짧은 기간
+  - 기간: 오라클 검증 완료까지 (~1-2분)
+  - 영향: 블록 생성 스케줄에 대한 최소한의 중단
 
 **증인 담합**
 - 위험: 악의적인 증인이 가짜 컬렉션 승인
