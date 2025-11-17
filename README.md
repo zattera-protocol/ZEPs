@@ -24,7 +24,7 @@ ZEPs are separated into several types:
 
 - **Standards Track ZEP**: Changes affecting most or all Zattera implementations
   - **Core**: Improvements requiring a consensus fork (e.g., ZEP-2, ZEP-4)
-  - **Networking**: Improvements to network protocol specifications (e.g., ZEP-3)
+  - **Networking**: Improvements to network protocol specifications
   - **Interface**: API/RPC specifications and standards
   - **Application**: Application-level standards and conventions, including:
     - Plugin interfaces and behaviors
