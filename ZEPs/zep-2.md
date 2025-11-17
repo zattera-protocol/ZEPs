@@ -13,7 +13,7 @@ requires: 3
 
 ## Abstract
 
-This ZEP proposes a witness authorization system requiring block producers to prove ownership of ERC-721 NFTs on Ethereum-compatible chains. Witnesses must periodically submit cryptographic proofs connecting their Zattera accounts to Ethereum addresses that own registered NFTs. An oracle service verifies on-chain ownership before witnesses become eligible for block production.
+This ZEP proposes a witness authorization system requiring block producers to prove ownership of ERC-721 NFTs on Ethereum-compatible chains. Witnesses must periodically submit cryptographic proofs demonstrating that they are the actual owners of the relevant NFTs. An oracle service verifies on-chain ownership before witnesses become eligible for block production.
 
 ## Motivation
 
