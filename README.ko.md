@@ -2,7 +2,7 @@
 
 ![Zattera 개선 제안 (ZEPs)](assets/images/main-banner.png)
 
-[English](README.md)
+[English](README.md) | [日本語](README.ja.md)
 
 </div>
 
