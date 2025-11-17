@@ -305,7 +305,27 @@ void witness_nft_proof_evaluator::do_apply(const witness_nft_proof_operation& o)
    FC_ASSERT(to_lowercase(recovered_address) == to_lowercase(o.eth_address),
              "Signature verification failed");
 
-   // Create or update proof object
+   // Check if another witness is already using this NFT
+   const auto& token_idx = _db.get_index<witness_nft_proof_index>()
+                               .indices().get<by_token_identity>();
+   auto existing_token = token_idx.find(
+      boost::make_tuple(o.contract_address, o.token_id, o.chain_id)
+   );
+
+   if (existing_token != token_idx.end() &&
+       existing_token->witness_account != o.witness_account)
+   {
+      // Different witness is claiming the same NFT
+      // This indicates NFT ownership transfer - invalidate old proof
+      _db.modify(*existing_token, [&](witness_nft_proof_object& p)
+      {
+         p.verification_status = witness_nft_proof_object::failed;
+         p.verification_details = "NFT transferred to " + o.witness_account;
+         p.verification_timestamp = _db.head_block_time();
+      });
+   }
+
+   // Create or update proof object for current witness
    const auto& proof_idx = _db.get_index<witness_nft_proof_index>()
                                .indices().get<by_witness>();
    auto proof_itr = proof_idx.find(o.witness_account);
@@ -604,6 +624,33 @@ get_collection_approvals_return get_collection_approvals(uint64_t collection_id)
 - Provably links Zattera account to ETH address
 - Cost-effective (one signature per week)
 
+#### 7. NFT Transfer Handling
+
+**Decision**: Automatically invalidate previous witness's proof when new witness claims same NFT
+
+**Behavior**:
+When witness B submits a proof for an NFT currently held by witness A:
+1. Witness A's proof is immediately marked as `failed`
+2. Verification details updated: "NFT transferred to [witness_B]"
+3. Witness A loses block production eligibility
+4. Witness B's proof enters `pending` status for oracle verification
+5. Only after oracle confirms ownership does witness B gain eligibility
+
+**Reasons**:
+- **Immediate protection**: Prevents witness A from continuing block production with transferred NFT
+- **Trustless transition**: No manual intervention required
+- **Clear ownership**: One NFT can only authorize one witness at a time
+- **Audit trail**: Failed proofs record ownership transfer history
+- **DoS prevention**: Oracle still validates new claim before granting eligibility
+
+**Trade-offs**:
+- **Attack vector**: Malicious witness could falsely claim another's NFT
+  - Mitigation: Oracle verification will fail, no actual harm done
+  - Original witness retains eligibility until attacker's oracle verification
+- **Race conditions**: If NFT sold during oracle verification period
+  - Mitigation: 7-day re-verification cycle catches ownership changes
+  - Both witnesses may temporarily lose eligibility until oracle confirms
+
 ### Alternative Approaches Considered
 
 #### A. Cross-Chain Bridge
@@ -870,6 +917,152 @@ BOOST_AUTO_TEST_CASE(nft_proof_expiration)
 }
 ```
 
+### Test Case 7: NFT Transfer Between Witnesses
+
+```cpp
+BOOST_AUTO_TEST_CASE(nft_transfer_between_witnesses)
+{
+   ACTORS((alice)(bob))
+   witness_create("alice", ...);
+   witness_create("bob", ...);
+
+   // Register collection
+   auto collection_id = register_and_approve_collection("BAYC", "0xBC4C...", 1);
+
+   // Alice submits proof for NFT #1234
+   string alice_message = "zattera:alice:nft:0xBC4C...:1234:1704672000";
+   string alice_signature = sign_ethereum_message(alice_eth_key, alice_message);
+
+   witness_nft_proof_operation alice_proof;
+   alice_proof.witness_account = "alice";
+   alice_proof.eth_address = "0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb";
+   alice_proof.contract_address = "0xBC4CA0EdA7647A8aB7C2061c2E118A18a936f13D";
+   alice_proof.token_id = "1234";
+   alice_proof.chain_id = 1;
+   alice_proof.eth_signature = alice_signature;
+   alice_proof.timestamp = fc::time_point_sec(1704672000);
+
+   push_transaction(alice_proof, alice_key);
+
+   // Verify Alice's proof created
+   const auto& proof_idx = db->get_index<witness_nft_proof_index>()
+                               .indices().get<by_witness>();
+   auto alice_proof_obj = proof_idx.find("alice");
+   BOOST_REQUIRE(alice_proof_obj != proof_idx.end());
+   BOOST_REQUIRE_EQUAL(alice_proof_obj->verification_status,
+                      witness_nft_proof_object::pending);
+
+   // Simulate oracle verification for Alice
+   db->modify(*alice_proof_obj, [&](witness_nft_proof_object& p) {
+      p.verification_status = witness_nft_proof_object::verified;
+      p.verification_details = "Oracle confirmed";
+   });
+
+   // Alice now eligible for block production
+   BOOST_REQUIRE(db->validate_witness_nft_ownership("alice"));
+
+   // NFT transferred: Bob submits proof for same NFT
+   string bob_message = "zattera:bob:nft:0xBC4C...:1234:1704672100";
+   string bob_signature = sign_ethereum_message(bob_eth_key, bob_message);
+
+   witness_nft_proof_operation bob_proof;
+   bob_proof.witness_account = "bob";
+   bob_proof.eth_address = "0x9876543210fedcba9876543210fedcba98765432";
+   bob_proof.contract_address = "0xBC4CA0EdA7647A8aB7C2061c2E118A18a936f13D";
+   bob_proof.token_id = "1234";  // Same NFT
+   bob_proof.chain_id = 1;
+   bob_proof.eth_signature = bob_signature;
+   bob_proof.timestamp = fc::time_point_sec(1704672100);
+
+   push_transaction(bob_proof, bob_key);
+
+   // Verify Alice's proof invalidated
+   alice_proof_obj = proof_idx.find("alice");
+   BOOST_REQUIRE(alice_proof_obj != proof_idx.end());
+   BOOST_REQUIRE_EQUAL(alice_proof_obj->verification_status,
+                      witness_nft_proof_object::failed);
+   BOOST_REQUIRE(alice_proof_obj->verification_details.find("transferred to bob")
+                 != string::npos);
+
+   // Alice no longer eligible
+   BOOST_REQUIRE(!db->validate_witness_nft_ownership("alice"));
+
+   // Bob's proof pending
+   auto bob_proof_obj = proof_idx.find("bob");
+   BOOST_REQUIRE(bob_proof_obj != proof_idx.end());
+   BOOST_REQUIRE_EQUAL(bob_proof_obj->verification_status,
+                      witness_nft_proof_object::pending);
+
+   // Bob not yet eligible (pending oracle)
+   BOOST_REQUIRE(!db->validate_witness_nft_ownership("bob"));
+
+   // Simulate oracle verification for Bob
+   db->modify(*bob_proof_obj, [&](witness_nft_proof_object& p) {
+      p.verification_status = witness_nft_proof_object::verified;
+      p.verification_details = "Oracle confirmed";
+   });
+
+   // Bob now eligible
+   BOOST_REQUIRE(db->validate_witness_nft_ownership("bob"));
+}
+```
+
+### Test Case 8: False NFT Claim Detection
+
+```cpp
+BOOST_AUTO_TEST_CASE(false_nft_claim)
+{
+   ACTORS((alice)(malicious))
+   witness_create("alice", ...);
+   witness_create("malicious", ...);
+
+   // Alice has verified proof
+   auto collection_id = register_and_approve_collection("BAYC", "0xBC4C...", 1);
+   create_verified_nft_proof("alice", "0x742d35Cc...", "0xBC4C...", "1234", 1);
+
+   BOOST_REQUIRE(db->validate_witness_nft_ownership("alice"));
+
+   // Malicious witness falsely claims Alice's NFT
+   string fake_message = "zattera:malicious:nft:0xBC4C...:1234:1704672200";
+   string fake_signature = sign_ethereum_message(malicious_eth_key, fake_message);
+
+   witness_nft_proof_operation fake_proof;
+   fake_proof.witness_account = "malicious";
+   fake_proof.eth_address = "0xbadbadbadbadbadbadbadbadbadbadbadbadbad";
+   fake_proof.contract_address = "0xBC4CA0EdA7647A8aB7C2061c2E118A18a936f13D";
+   fake_proof.token_id = "1234";  // Alice's NFT
+   fake_proof.chain_id = 1;
+   fake_proof.eth_signature = fake_signature;
+   fake_proof.timestamp = fc::time_point_sec(1704672200);
+
+   push_transaction(fake_proof, malicious_key);
+
+   // Alice's proof invalidated (temporarily)
+   const auto& proof_idx = db->get_index<witness_nft_proof_index>()
+                               .indices().get<by_witness>();
+   auto alice_proof = proof_idx.find("alice");
+   BOOST_REQUIRE_EQUAL(alice_proof->verification_status,
+                      witness_nft_proof_object::failed);
+
+   // Malicious proof pending
+   auto mal_proof = proof_idx.find("malicious");
+   BOOST_REQUIRE_EQUAL(mal_proof->verification_status,
+                      witness_nft_proof_object::pending);
+
+   // Simulate oracle verification - detects false claim
+   db->modify(*mal_proof, [&](witness_nft_proof_object& p) {
+      p.verification_status = witness_nft_proof_object::failed;
+      p.verification_details = "Oracle: actual owner is 0x742d35Cc...";
+   });
+
+   // Malicious witness not eligible
+   BOOST_REQUIRE(!db->validate_witness_nft_ownership("malicious"));
+
+   // Alice must re-submit proof to regain eligibility
+   BOOST_REQUIRE(!db->validate_witness_nft_ownership("alice"));
+}
+```
+
 ## Reference Implementation
 
 Available in feature branch:
@@ -926,6 +1119,26 @@ Available in feature branch:
   - 7-day proof validity requires continuous ownership
   - Frequent re-verification detects transfers
   - NFT staking (future enhancement)
+
+**NFT Transfer Between Witnesses**
+- Risk: Witness sells NFT to another witness to circumvent limits
+- Behavior: Automatic invalidation of previous witness's proof
+- Impact:
+  - Previous witness loses eligibility immediately upon new claim
+  - New witness gains eligibility only after oracle verification
+  - Temporary gap where neither witness can produce blocks with that NFT
+- Protection: Oracle verification ensures legitimate ownership transfer
+
+**False NFT Claim Attacks**
+- Risk: Malicious witness claims another witness's NFT without owning it
+- Mitigation:
+  - Invalid proof will fail oracle verification
+  - Original witness's proof only invalidated after signature verification
+  - Attacker gains no benefit (oracle will reject fake claim)
+  - Failed proof attempts are logged for monitoring
+- Trade-off: Brief window where original witness proof marked as failed
+  - Duration: Until oracle completes verification (~1-2 minutes)
+  - Impact: Minimal disruption to block production schedule
 
 **Witness Collusion**
 - Risk: Malicious witnesses approve fake collections
