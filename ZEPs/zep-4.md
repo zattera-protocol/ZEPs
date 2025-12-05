@@ -75,7 +75,7 @@ A new chain parameter `percent_network_voting_threshold` is introduced:
 
 #### 1. Protocol Layer Changes
 
-**File**: `libraries/protocol/include/zattera/protocol/chain_parameters.hpp`
+**File**: `src/core/protocol/include/steem/protocol/chain_parameters.hpp`
 
 Add chain parameter:
 ```cpp
@@ -88,7 +88,7 @@ struct chain_parameters
 
 #### 2. Database Modifications
 
-**File**: `libraries/chain/database.cpp`
+**File**: `src/core/chain/database.cpp`
 
 Modify `process_funds()` function:
 
@@ -296,9 +296,9 @@ A complete reference implementation is available in the feature branch:
 
 - Branch: `feature/voting-threshold-reward-reduction`
 - Key Files:
-  - `libraries/protocol/include/zattera/protocol/chain_parameters.hpp`
-  - `libraries/chain/database.cpp` (process_funds function)
-  - `libraries/chain/include/zattera/chain/global_property_object.hpp`
+  - `src/core/protocol/include/steem/protocol/chain_parameters.hpp`
+  - `src/core/chain/database.cpp` (process_funds function)
+  - `src/core/chain/include/steem/chain/global_property_object.hpp`
   - `tests/tests/reward_tests.cpp`
 
 ## Security Considerations

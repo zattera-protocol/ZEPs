@@ -552,13 +552,13 @@ BOOST_AUTO_TEST_CASE(reward_multiplier_application)
    // ... 콘텐츠 생성 및 투표 ...
 
    // 예상 보상 계산
-   asset base_reward = ASSET("100.000 TESTS");
+   asset base_reward = ASSET("100.000 TTR");
 
    // Alice (레벨 0, 100% 승수)
    asset alice_expected = base_reward;
 
    // Bob (레벨 3, 200% 승수)
-   asset bob_expected = ASSET("200.000 TESTS");
+   asset bob_expected = ASSET("200.000 TTR");
 
    // 보상이 올바르게 분배되었는지 확인
    BOOST_REQUIRE_EQUAL(alice_account.reward_sbd_balance, alice_expected);
@@ -572,10 +572,10 @@ BOOST_AUTO_TEST_CASE(reward_multiplier_application)
 
 - 브랜치: `feature/reward-level-system`
 - 주요 파일:
-  - `libraries/protocol/include/zattera/protocol/zattera_operations.hpp`
-  - `libraries/chain/include/zattera/chain/reward_level_objects.hpp`
-  - `libraries/chain/zattera_evaluator.cpp`
-  - `libraries/chain/database.cpp`
+  - `src/core/protocol/include/steem/protocol/steem_operations.hpp`
+  - `src/core/chain/include/steem/chain/reward_level_objects.hpp`
+  - `src/core/chain/steem_evaluator.cpp`
+  - `src/core/chain/database.cpp`
   - `tests/tests/reward_level_tests.cpp`
 
 ## 보안 고려사항

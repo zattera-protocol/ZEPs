@@ -451,7 +451,7 @@ typedef multi_index_container<
 
 블록 생산 자격에는 유효한 NFT 증명이 필요합니다.
 
-**File**: `libraries/chain/database.cpp`
+**File**: `src/core/chain/database.cpp`
 
 ```cpp
 bool database::validate_witness_nft_ownership(const account_name_type& witness) const
@@ -1069,11 +1069,11 @@ BOOST_AUTO_TEST_CASE(false_nft_claim)
 
 - Branch: `feature/nft-witness-verification`
 - 주요 파일:
-  - `libraries/protocol/include/zattera/protocol/zattera_operations.hpp`
-  - `libraries/chain/include/zattera/chain/nft_verification_objects.hpp`
-  - `libraries/chain/nft_evaluator.cpp`
-  - `libraries/chain/database.cpp` (증인 스케줄)
-  - `libraries/plugins/nft_oracle/` (ZEP-3 참조)
+  - `src/core/protocol/include/steem/protocol/steem_operations.hpp`
+  - `src/core/chain/include/steem/chain/nft_verification_objects.hpp`
+  - `src/core/chain/nft_evaluator.cpp`
+  - `src/core/chain/database.cpp` (증인 스케줄)
+  - `src/plugins/nft_oracle/` (ZEP-3 참조)
   - `tests/tests/nft_witness_tests.cpp`
 
 ## Security Considerations

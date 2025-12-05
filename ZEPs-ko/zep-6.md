@@ -164,7 +164,7 @@ class comment_object : public object<comment_object_type, comment_object>
 
 #### 3. 댓글 평가자 변경사항
 
-**파일**: `libraries/chain/zattera_evaluator.cpp`
+**파일**: `src/core/chain/steem_evaluator.cpp`
 
 ```cpp
 void comment_evaluator::do_apply(const comment_operation& o)
@@ -694,10 +694,10 @@ BOOST_AUTO_TEST_CASE(comment_permission_child_independence)
 
 - 브랜치: `feature/comment-permission-control`
 - 주요 파일:
-  - `libraries/protocol/include/zattera/protocol/zattera_operations.hpp`
-  - `libraries/chain/include/zattera/chain/comment_object.hpp`
-  - `libraries/chain/zattera_evaluator.cpp`
-  - `libraries/plugins/apis/database_api/database_api.cpp`
+  - `src/core/protocol/include/steem/protocol/steem_operations.hpp`
+  - `src/core/chain/include/steem/chain/comment_object.hpp`
+  - `src/core/chain/steem_evaluator.cpp`
+  - `src/plugins/apis/database_api/database_api.cpp`
   - `tests/tests/comment_permission_tests.cpp`
 
 ## 보안 고려사항

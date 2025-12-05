@@ -552,13 +552,13 @@ BOOST_AUTO_TEST_CASE(reward_multiplier_application)
    // ... content creation and voting ...
 
    // Calculate expected rewards
-   asset base_reward = ASSET("100.000 TESTS");
+   asset base_reward = ASSET("100.000 TTR");
 
    // Alice (level 0, 100% multiplier)
    asset alice_expected = base_reward;
 
    // Bob (level 3, 200% multiplier)
-   asset bob_expected = ASSET("200.000 TESTS");
+   asset bob_expected = ASSET("200.000 TTR");
 
    // Verify rewards distributed correctly
    BOOST_REQUIRE_EQUAL(alice_account.reward_sbd_balance, alice_expected);
@@ -572,10 +572,10 @@ Reference implementation available in feature branch:
 
 - Branch: `feature/reward-level-system`
 - Key Files:
-  - `libraries/protocol/include/zattera/protocol/zattera_operations.hpp`
-  - `libraries/chain/include/zattera/chain/reward_level_objects.hpp`
-  - `libraries/chain/zattera_evaluator.cpp`
-  - `libraries/chain/database.cpp`
+  - `src/core/protocol/include/steem/protocol/steem_operations.hpp`
+  - `src/core/chain/include/steem/chain/reward_level_objects.hpp`
+  - `src/core/chain/steem_evaluator.cpp`
+  - `src/core/chain/database.cpp`
   - `tests/tests/reward_level_tests.cpp`
 
 ## Security Considerations

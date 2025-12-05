@@ -451,7 +451,7 @@ typedef multi_index_container<
 
 Block production eligibility requires valid NFT proof.
 
-**File**: `libraries/chain/database.cpp`
+**File**: `src/core/chain/database.cpp`
 
 ```cpp
 bool database::validate_witness_nft_ownership(const account_name_type& witness) const
@@ -1069,11 +1069,11 @@ Available in feature branch:
 
 - Branch: `feature/nft-witness-verification`
 - Key Files:
-  - `libraries/protocol/include/zattera/protocol/zattera_operations.hpp`
-  - `libraries/chain/include/zattera/chain/nft_verification_objects.hpp`
-  - `libraries/chain/nft_evaluator.cpp`
-  - `libraries/chain/database.cpp` (witness schedule)
-  - `libraries/plugins/nft_oracle/` (See ZEP-3)
+  - `src/core/protocol/include/steem/protocol/steem_operations.hpp`
+  - `src/core/chain/include/steem/chain/nft_verification_objects.hpp`
+  - `src/core/chain/nft_evaluator.cpp`
+  - `src/core/chain/database.cpp` (witness schedule)
+  - `src/plugins/nft_oracle/` (See ZEP-3)
   - `tests/tests/nft_witness_tests.cpp`
 
 ## Security Considerations

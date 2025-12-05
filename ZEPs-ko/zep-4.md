@@ -75,7 +75,7 @@ created: 2025-11-11
 
 #### 1. 프로토콜 계층 변경
 
-**파일**: `libraries/protocol/include/zattera/protocol/chain_parameters.hpp`
+**파일**: `src/core/protocol/include/steem/protocol/chain_parameters.hpp`
 
 체인 매개변수 추가:
 ```cpp
@@ -88,7 +88,7 @@ struct chain_parameters
 
 #### 2. 데이터베이스 수정
 
-**파일**: `libraries/chain/database.cpp`
+**파일**: `src/core/chain/database.cpp`
 
 `process_funds()` 함수 수정:
 
@@ -296,9 +296,9 @@ BOOST_AUTO_TEST_CASE( exact_threshold_boundary )
 
 - 브랜치: `feature/voting-threshold-reward-reduction`
 - 주요 파일:
-  - `libraries/protocol/include/zattera/protocol/chain_parameters.hpp`
-  - `libraries/chain/database.cpp` (process_funds 함수)
-  - `libraries/chain/include/zattera/chain/global_property_object.hpp`
+  - `src/core/protocol/include/steem/protocol/chain_parameters.hpp`
+  - `src/core/chain/database.cpp` (process_funds 함수)
+  - `src/core/chain/include/steem/chain/global_property_object.hpp`
   - `tests/tests/reward_tests.cpp`
 
 ## 보안 고려사항

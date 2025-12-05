@@ -767,10 +767,10 @@ BOOST_AUTO_TEST_CASE(oracle_multi_chain)
 
 - Branch: `feature/nft-oracle-plugin`
 - 주요 파일:
-  - `libraries/plugins/nft_oracle/nft_oracle_plugin.hpp`
-  - `libraries/plugins/nft_oracle/nft_oracle_plugin.cpp`
-  - `libraries/plugins/nft_oracle/rpc_client.hpp`
-  - `libraries/plugins/nft_oracle/rpc_client.cpp`
+  - `src/plugins/nft_oracle/nft_oracle_plugin.hpp`
+  - `src/plugins/nft_oracle/nft_oracle_plugin.cpp`
+  - `src/plugins/nft_oracle/rpc_client.hpp`
+  - `src/plugins/nft_oracle/rpc_client.cpp`
   - `tests/plugin_tests/nft_oracle_tests.cpp`
 
 ## Security Considerations
