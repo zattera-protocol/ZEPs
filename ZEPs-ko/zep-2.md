@@ -398,6 +398,52 @@ string recover_eth_address(const string& message, const string& signature)
 }
 ```
 
+**Database 신호 메커니즘**:
+
+데이터베이스는 오라클 플러그인이 새로운 NFT 증명 제출을 감지할 수 있도록 신호를 발생시킵니다.
+
+```cpp
+// File: src/core/chain/database.hpp
+class database
+{
+public:
+   // NFT 증명 제출 신호
+   boost::signals2::signal<void(const witness_nft_proof_operation&)> nft_proof_submitted;
+
+   // 신호 발생 메서드
+   void notify_nft_proof_submitted(const witness_nft_proof_operation& op)
+   {
+      nft_proof_submitted(op);
+   }
+
+   // ... 기타 메서드 ...
+};
+```
+
+**오라클 플러그인 통합**:
+
+오라클 플러그인은 이 신호를 구독하여 NFT 소유권 검증을 수행합니다.
+
+```cpp
+// File: src/plugins/nft_oracle/nft_oracle_plugin.cpp
+void nft_oracle_plugin::plugin_initialize(const boost::program_options::variables_map& options)
+{
+   // 데이터베이스 신호 구독
+   _db.nft_proof_submitted.connect([this](const witness_nft_proof_operation& op) {
+      // 비동기 검증 작업 큐에 추가
+      enqueue_verification_task(op);
+   });
+}
+
+void nft_oracle_plugin::enqueue_verification_task(const witness_nft_proof_operation& op)
+{
+   // 백그라운드 스레드에서 EVM 체인 쿼리
+   verification_queue.push([this, op]() {
+      verify_nft_ownership(op);
+   });
+}
+```
+
 **Database Object**: `witness_nft_proof_object`
 
 ```cpp

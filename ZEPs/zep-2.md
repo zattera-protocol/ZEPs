@@ -398,6 +398,52 @@ string recover_eth_address(const string& message, const string& signature)
 }
 ```
 
+**Database Signal Mechanism**:
+
+The database emits signals to allow the oracle plugin to detect new NFT proof submissions.
+
+```cpp
+// File: src/core/chain/database.hpp
+class database
+{
+public:
+   // NFT proof submission signal
+   boost::signals2::signal<void(const witness_nft_proof_operation&)> nft_proof_submitted;
+
+   // Signal emission method
+   void notify_nft_proof_submitted(const witness_nft_proof_operation& op)
+   {
+      nft_proof_submitted(op);
+   }
+
+   // ... other methods ...
+};
+```
+
+**Oracle Plugin Integration**:
+
+The oracle plugin subscribes to this signal to perform NFT ownership verification.
+
+```cpp
+// File: src/plugins/nft_oracle/nft_oracle_plugin.cpp
+void nft_oracle_plugin::plugin_initialize(const boost::program_options::variables_map& options)
+{
+   // Subscribe to database signal
+   _db.nft_proof_submitted.connect([this](const witness_nft_proof_operation& op) {
+      // Add to asynchronous verification task queue
+      enqueue_verification_task(op);
+   });
+}
+
+void nft_oracle_plugin::enqueue_verification_task(const witness_nft_proof_operation& op)
+{
+   // Query EVM chain in background thread
+   verification_queue.push([this, op]() {
+      verify_nft_ownership(op);
+   });
+}
+```
+
 **Database Object**: `witness_nft_proof_object`
 
 ```cpp
