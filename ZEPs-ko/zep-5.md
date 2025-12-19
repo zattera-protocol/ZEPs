@@ -561,8 +561,8 @@ BOOST_AUTO_TEST_CASE(reward_multiplier_application)
    asset bob_expected = ASSET("200.000 TTR");
 
    // 보상이 올바르게 분배되었는지 확인
-   BOOST_REQUIRE_EQUAL(alice_account.reward_sbd_balance, alice_expected);
-   BOOST_REQUIRE_EQUAL(bob_account.reward_sbd_balance, bob_expected);
+   BOOST_REQUIRE_EQUAL(alice_account.reward_dollar_balance, alice_expected);
+   BOOST_REQUIRE_EQUAL(bob_account.reward_dollar_balance, bob_expected);
 }
 ```
 
