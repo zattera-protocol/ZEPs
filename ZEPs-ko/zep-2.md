@@ -312,18 +312,9 @@ void witness_nft_proof_evaluator::do_apply(const witness_nft_proof_operation& o)
       boost::make_tuple(o.contract_address, o.token_id, o.chain_id)
    );
 
-   if (existing_token != token_idx.end() &&
-       existing_token->witness_account != o.witness_account)
-   {
-      // 다른 증인이 동일한 NFT를 요구하는 경우
-      // NFT 소유권이 이전되었음을 나타냄 - 기존 증명 무효화
-      _db.modify(*existing_token, [&](witness_nft_proof_object& p)
-      {
-         p.verification_status = witness_nft_proof_object::failed;
-         p.verification_details = "NFT transferred to " + o.witness_account;
-         p.verification_timestamp = _db.head_block_time();
-      });
-   }
+   // 중복 NFT 요구 감지 - 오라클 검증 시 처리됨
+   // DoS 공격 방지를 위해 이전 증인의 증명은 즉시 무효화하지 않음
+   // 오라클이 새 증인의 소유권을 확인한 후에만 이전 증인 무효화
 
    // 현재 증인의 증명 객체 생성 또는 업데이트
    const auto& proof_idx = _db.get_index<witness_nft_proof_index>()
@@ -441,6 +432,67 @@ void nft_oracle_plugin::enqueue_verification_task(const witness_nft_proof_operat
    verification_queue.push([this, op]() {
       verify_nft_ownership(op);
    });
+}
+
+void nft_oracle_plugin::verify_nft_ownership(const witness_nft_proof_operation& op)
+{
+   try {
+      // EVM 체인에서 실제 소유자 확인
+      string actual_owner = query_nft_owner(op.contract_address, op.token_id, op.chain_id);
+
+      auto& db = database();
+      const auto& proof_idx = db.get_index<witness_nft_proof_index>()
+                                 .indices().get<by_witness>();
+      auto proof_itr = proof_idx.find(op.witness_account);
+
+      if (proof_itr == proof_idx.end())
+         return;  // 증명이 이미 삭제됨
+
+      if (to_lowercase(actual_owner) == to_lowercase(op.eth_address))
+      {
+         // 소유권 확인됨 - 증명 승인
+         db.modify(*proof_itr, [&](witness_nft_proof_object& p) {
+            p.verification_status = witness_nft_proof_object::verified;
+            p.verification_details = "Oracle verified ownership";
+            p.verification_timestamp = db.head_block_time();
+         });
+
+         // 동일한 NFT를 사용하는 다른 증인의 증명 무효화
+         const auto& token_idx = db.get_index<witness_nft_proof_index>()
+                                    .indices().get<by_token_identity>();
+         auto range = token_idx.equal_range(
+            boost::make_tuple(op.contract_address, op.token_id, op.chain_id)
+         );
+
+         for (auto itr = range.first; itr != range.second; ++itr)
+         {
+            if (itr->witness_account != op.witness_account &&
+                itr->verification_status == witness_nft_proof_object::verified)
+            {
+               db.modify(*itr, [&](witness_nft_proof_object& p) {
+                  p.verification_status = witness_nft_proof_object::failed;
+                  p.verification_details = "NFT transferred to " + op.witness_account;
+                  p.verification_timestamp = db.head_block_time();
+               });
+            }
+         }
+      }
+      else
+      {
+         // 소유권 불일치 - 증명 거부
+         db.modify(*proof_itr, [&](witness_nft_proof_object& p) {
+            p.verification_status = witness_nft_proof_object::failed;
+            p.verification_details = "Oracle: actual owner is " + actual_owner;
+            p.verification_timestamp = db.head_block_time();
+         });
+      }
+   }
+   catch (const fc::exception& e)
+   {
+      // 오라클 오류 처리
+      elog("NFT verification failed for ${w}: ${e}",
+           ("w", op.witness_account)("e", e.to_detail_string()));
+   }
 }
 ```
 
@@ -676,26 +728,32 @@ get_collection_approvals_return get_collection_approvals(uint64_t collection_id)
 
 **동작 방식**:
 증인 B가 증인 A가 현재 보유한 NFT에 대한 증명을 제출할 때:
-1. 증인 A의 증명이 즉시 `failed`로 표시됨
-2. 검증 세부 정보 업데이트: "NFT transferred to [witness_B]"
-3. 증인 A가 블록 생성 자격 상실
-4. 증인 B의 증명이 오라클 검증을 위해 `pending` 상태로 진입
-5. 오라클이 소유권을 확인한 후에만 증인 B가 자격 획득
+1. 증인 B의 증명이 `pending` 상태로 생성됨
+2. 증인 A의 증명은 그대로 유지 (아직 `verified` 상태)
+3. 오라클이 EVM 체인에서 실제 소유자를 확인
+4. **실제 양도된 경우**:
+   - 증인 B의 증명을 `verified`로 변경
+   - 증인 A의 증명을 `failed`로 변경 ("NFT transferred to witness_B")
+   - 증인 A는 블록 생성 자격 상실
+5. **허위 요구인 경우**:
+   - 증인 B의 증명을 `failed`로 변경
+   - 증인 A의 증명은 계속 유효
+   - 증인 A는 블록 생성 자격 유지
 
 **이유**:
-- **즉각적인 보호**: 증인 A가 양도된 NFT로 블록 생성을 계속하는 것을 방지
-- **무신뢰 전환**: 수동 개입 불필요
-- **명확한 소유권**: 하나의 NFT는 한 번에 하나의 증인만 인증 가능
-- **감사 추적**: 실패한 증명이 소유권 이전 기록을 남김
-- **DoS 방지**: 오라클이 여전히 자격 부여 전에 새 요구를 검증
+- **DoS 방지**: 악의적인 증인이 허위 요구로 다른 증인을 무력화할 수 없음
+- **무신뢰 전환**: 오라클이 온체인 데이터로 실제 소유권 확인
+- **명확한 소유권**: 오라클 검증 후 하나의 NFT는 한 번에 하나의 증인만 인증
+- **감사 추적**: 모든 증명 시도와 검증 결과가 기록됨
+- **운영 안정성**: 합법적인 증인이 허위 공격으로 인한 다운타임 없음
 
 **트레이드오프**:
-- **공격 벡터**: 악의적인 증인이 다른 증인의 NFT를 허위로 요구할 수 있음
-  - 완화책: 오라클 검증 실패, 실제 피해 없음
-  - 공격자의 오라클 검증까지 원래 증인은 자격 유지
-- **경쟁 조건**: 오라클 검증 기간 중 NFT가 판매되는 경우
-  - 완화책: 7일 재검증 주기로 소유권 변경 감지
-  - 두 증인 모두 오라클 확인까지 일시적으로 자격 상실 가능
+- **양도 지연**: NFT가 실제로 양도된 경우, 오라클 검증까지 (1-2분) 이전 증인이 계속 블록 생성 가능
+  - 완화책: 빠른 오라클 검증 (12 블록 확인 후)
+  - 영향: 최소한의 보안 위험 (단기간)
+- **일시적 중복**: 검증 기간 동안 두 증인 모두 증명 보유
+  - 완화책: 검증 상태가 다름 (verified vs pending)
+  - 실제 블록 생산 자격은 `verified` 증명만 가짐
 
 ### 고려된 대안 접근 방식
 
@@ -1022,16 +1080,14 @@ BOOST_AUTO_TEST_CASE(nft_transfer_between_witnesses)
 
    push_transaction(bob_proof, bob_key);
 
-   // Alice의 증명 무효화 확인
+   // Alice의 증명은 아직 유효함 (오라클 검증 전)
    alice_proof_obj = proof_idx.find("alice");
    BOOST_REQUIRE(alice_proof_obj != proof_idx.end());
    BOOST_REQUIRE_EQUAL(alice_proof_obj->verification_status,
-                      witness_nft_proof_object::failed);
-   BOOST_REQUIRE(alice_proof_obj->verification_details.find("transferred to bob")
-                 != string::npos);
+                      witness_nft_proof_object::verified);
 
-   // Alice는 더 이상 자격 없음
-   BOOST_REQUIRE(!db->validate_witness_nft_ownership("alice"));
+   // Alice는 여전히 블록 생성 자격 있음
+   BOOST_REQUIRE(db->validate_witness_nft_ownership("alice"));
 
    // Bob의 증명은 대기 중
    auto bob_proof_obj = proof_idx.find("bob");
@@ -1042,14 +1098,23 @@ BOOST_AUTO_TEST_CASE(nft_transfer_between_witnesses)
    // Bob은 아직 자격 없음 (오라클 대기 중)
    BOOST_REQUIRE(!db->validate_witness_nft_ownership("bob"));
 
-   // Bob에 대한 오라클 검증 시뮬레이션
+   // Bob에 대한 오라클 검증 시뮬레이션 (NFT 양도 확인)
+   // 오라클이 Bob을 실제 소유자로 확인하면 Alice의 증명도 무효화됨
    db->modify(*bob_proof_obj, [&](witness_nft_proof_object& p) {
       p.verification_status = witness_nft_proof_object::verified;
       p.verification_details = "Oracle confirmed";
    });
 
-   // Bob은 이제 자격 있음
+   db->modify(*alice_proof_obj, [&](witness_nft_proof_object& p) {
+      p.verification_status = witness_nft_proof_object::failed;
+      p.verification_details = "NFT transferred to bob";
+   });
+
+   // 이제 Bob은 자격 있음
    BOOST_REQUIRE(db->validate_witness_nft_ownership("bob"));
+
+   // Alice는 더 이상 자격 없음
+   BOOST_REQUIRE(!db->validate_witness_nft_ownership("alice"));
 }
 ```
 
@@ -1083,17 +1148,23 @@ BOOST_AUTO_TEST_CASE(false_nft_claim)
 
    push_transaction(fake_proof, malicious_key);
 
-   // Alice의 증명 무효화됨 (일시적으로)
+   // Alice의 증명은 여전히 유효함 (DoS 방지)
    const auto& proof_idx = db->get_index<witness_nft_proof_index>()
                                .indices().get<by_witness>();
    auto alice_proof = proof_idx.find("alice");
    BOOST_REQUIRE_EQUAL(alice_proof->verification_status,
-                      witness_nft_proof_object::failed);
+                      witness_nft_proof_object::verified);
+
+   // Alice는 계속 블록 생성 자격 있음
+   BOOST_REQUIRE(db->validate_witness_nft_ownership("alice"));
 
    // 악의적인 증명은 대기 중
    auto mal_proof = proof_idx.find("malicious");
    BOOST_REQUIRE_EQUAL(mal_proof->verification_status,
                       witness_nft_proof_object::pending);
+
+   // 악의적인 증인은 아직 자격 없음 (검증 대기 중)
+   BOOST_REQUIRE(!db->validate_witness_nft_ownership("malicious"));
 
    // 오라클 검증 시뮬레이션 - 허위 요구 감지
    db->modify(*mal_proof, [&](witness_nft_proof_object& p) {
@@ -1104,8 +1175,8 @@ BOOST_AUTO_TEST_CASE(false_nft_claim)
    // 악의적인 증인은 자격 없음
    BOOST_REQUIRE(!db->validate_witness_nft_ownership("malicious"));
 
-   // Alice는 자격을 되찾기 위해 증명을 재제출해야 함
-   BOOST_REQUIRE(!db->validate_witness_nft_ownership("alice"));
+   // Alice는 여전히 유효한 증명과 블록 생성 자격 보유
+   BOOST_REQUIRE(db->validate_witness_nft_ownership("alice"));
 }
 ```
 
@@ -1169,23 +1240,23 @@ BOOST_AUTO_TEST_CASE(false_nft_claim)
 
 **증인 간 NFT 양도**
 - 위험: 증인이 제한을 우회하기 위해 다른 증인에게 NFT 판매
-- 동작: 이전 증인의 증명 자동 무효화
+- 동작: 오라클 검증 후 이전 증인의 증명 무효화
 - 영향:
-  - 이전 증인은 새로운 요구 시 즉시 자격 상실
-  - 새 증인은 오라클 검증 후에만 자격 획득
-  - 해당 NFT로 두 증인 모두 블록을 생성할 수 없는 일시적인 공백 발생
+  - 새 증인이 증명 제출 시 이전 증인은 자격 유지 (DoS 방지)
+  - 오라클이 실제 양도를 확인한 후에만 이전 증인 무효화
+  - 양도 확인까지 1-2분의 짧은 지연
+  - 해당 기간 동안 이전 증인이 블록 생산 가능 (최소한의 보안 위험)
 - 보호: 오라클 검증이 합법적인 소유권 이전 보장
 
 **허위 NFT 요구 공격**
 - 위험: 악의적인 증인이 다른 증인의 NFT를 소유하지 않고 요구
 - 완화:
-  - 유효하지 않은 증명은 오라클 검증 실패
-  - 원래 증인의 증명은 서명 검증 후에만 무효화됨
+  - **DoS 방지**: 원래 증인의 증명은 오라클 검증 전까지 유지됨
+  - 허위 요구는 오라클 검증 실패
   - 공격자는 아무 이득 없음 (오라클이 가짜 요구 거부)
+  - 원래 증인은 블록 생성 자격 유지
   - 실패한 증명 시도가 모니터링을 위해 기록됨
-- 트레이드오프: 원래 증인 증명이 실패로 표시되는 짧은 기간
-  - 기간: 오라클 검증 완료까지 (~1-2분)
-  - 영향: 블록 생성 스케줄에 대한 최소한의 중단
+- **핵심 개선**: 악의적인 요구가 합법적인 증인에게 영향 없음
 
 **증인 담합**
 - 위험: 악의적인 증인이 가짜 컬렉션 승인

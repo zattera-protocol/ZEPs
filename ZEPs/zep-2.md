@@ -312,18 +312,9 @@ void witness_nft_proof_evaluator::do_apply(const witness_nft_proof_operation& o)
       boost::make_tuple(o.contract_address, o.token_id, o.chain_id)
    );
 
-   if (existing_token != token_idx.end() &&
-       existing_token->witness_account != o.witness_account)
-   {
-      // Different witness is claiming the same NFT
-      // This indicates NFT ownership transfer - invalidate old proof
-      _db.modify(*existing_token, [&](witness_nft_proof_object& p)
-      {
-         p.verification_status = witness_nft_proof_object::failed;
-         p.verification_details = "NFT transferred to " + o.witness_account;
-         p.verification_timestamp = _db.head_block_time();
-      });
-   }
+   // Duplicate NFT claim detected - handled by oracle verification
+   // Do not immediately invalidate previous witness's proof to prevent DoS attacks
+   // Only invalidate previous witness after oracle confirms new witness ownership
 
    // Create or update proof object for current witness
    const auto& proof_idx = _db.get_index<witness_nft_proof_index>()
@@ -441,6 +432,67 @@ void nft_oracle_plugin::enqueue_verification_task(const witness_nft_proof_operat
    verification_queue.push([this, op]() {
       verify_nft_ownership(op);
    });
+}
+
+void nft_oracle_plugin::verify_nft_ownership(const witness_nft_proof_operation& op)
+{
+   try {
+      // Query actual owner from EVM chain
+      string actual_owner = query_nft_owner(op.contract_address, op.token_id, op.chain_id);
+
+      auto& db = database();
+      const auto& proof_idx = db.get_index<witness_nft_proof_index>()
+                                 .indices().get<by_witness>();
+      auto proof_itr = proof_idx.find(op.witness_account);
+
+      if (proof_itr == proof_idx.end())
+         return;  // Proof already deleted
+
+      if (to_lowercase(actual_owner) == to_lowercase(op.eth_address))
+      {
+         // Ownership confirmed - approve proof
+         db.modify(*proof_itr, [&](witness_nft_proof_object& p) {
+            p.verification_status = witness_nft_proof_object::verified;
+            p.verification_details = "Oracle verified ownership";
+            p.verification_timestamp = db.head_block_time();
+         });
+
+         // Invalidate other witnesses using the same NFT
+         const auto& token_idx = db.get_index<witness_nft_proof_index>()
+                                    .indices().get<by_token_identity>();
+         auto range = token_idx.equal_range(
+            boost::make_tuple(op.contract_address, op.token_id, op.chain_id)
+         );
+
+         for (auto itr = range.first; itr != range.second; ++itr)
+         {
+            if (itr->witness_account != op.witness_account &&
+                itr->verification_status == witness_nft_proof_object::verified)
+            {
+               db.modify(*itr, [&](witness_nft_proof_object& p) {
+                  p.verification_status = witness_nft_proof_object::failed;
+                  p.verification_details = "NFT transferred to " + op.witness_account;
+                  p.verification_timestamp = db.head_block_time();
+               });
+            }
+         }
+      }
+      else
+      {
+         // Ownership mismatch - reject proof
+         db.modify(*proof_itr, [&](witness_nft_proof_object& p) {
+            p.verification_status = witness_nft_proof_object::failed;
+            p.verification_details = "Oracle: actual owner is " + actual_owner;
+            p.verification_timestamp = db.head_block_time();
+         });
+      }
+   }
+   catch (const fc::exception& e)
+   {
+      // Handle oracle errors
+      elog("NFT verification failed for ${w}: ${e}",
+           ("w", op.witness_account)("e", e.to_detail_string()));
+   }
 }
 ```
 
@@ -672,30 +724,36 @@ get_collection_approvals_return get_collection_approvals(uint64_t collection_id)
 
 #### 7. NFT Transfer Handling
 
-**Decision**: Automatically invalidate previous witness's proof when new witness claims same NFT
+**Decision**: Invalidate previous witness's proof only after oracle verification
 
 **Behavior**:
 When witness B submits a proof for an NFT currently held by witness A:
-1. Witness A's proof is immediately marked as `failed`
-2. Verification details updated: "NFT transferred to [witness_B]"
-3. Witness A loses block production eligibility
-4. Witness B's proof enters `pending` status for oracle verification
-5. Only after oracle confirms ownership does witness B gain eligibility
+1. Witness B's proof is created with `pending` status
+2. Witness A's proof remains unchanged (still `verified`)
+3. Oracle queries the actual owner on EVM chain
+4. **If transfer is real**:
+   - Witness B's proof changes to `verified`
+   - Witness A's proof changes to `failed` ("NFT transferred to witness_B")
+   - Witness A loses block production eligibility
+5. **If false claim**:
+   - Witness B's proof changes to `failed`
+   - Witness A's proof remains valid
+   - Witness A retains block production eligibility
 
 **Reasons**:
-- **Immediate protection**: Prevents witness A from continuing block production with transferred NFT
-- **Trustless transition**: No manual intervention required
-- **Clear ownership**: One NFT can only authorize one witness at a time
-- **Audit trail**: Failed proofs record ownership transfer history
-- **DoS prevention**: Oracle still validates new claim before granting eligibility
+- **DoS prevention**: Malicious witnesses cannot disable others with false claims
+- **Trustless transition**: Oracle confirms actual ownership with on-chain data
+- **Clear ownership**: After oracle verification, one NFT authorizes only one witness
+- **Audit trail**: All proof attempts and verification results are recorded
+- **Operational stability**: Legitimate witnesses have no downtime from false attacks
 
 **Trade-offs**:
-- **Attack vector**: Malicious witness could falsely claim another's NFT
-  - Mitigation: Oracle verification will fail, no actual harm done
-  - Original witness retains eligibility until attacker's oracle verification
-- **Race conditions**: If NFT sold during oracle verification period
-  - Mitigation: 7-day re-verification cycle catches ownership changes
-  - Both witnesses may temporarily lose eligibility until oracle confirms
+- **Transfer delay**: If NFT is actually transferred, previous witness can produce blocks until oracle verification (1-2 min)
+  - Mitigation: Fast oracle verification (after 12 block confirmations)
+  - Impact: Minimal security risk (short period)
+- **Temporary duplication**: Both witnesses have proofs during verification period
+  - Mitigation: Verification status differs (verified vs pending)
+  - Only `verified` proofs grant actual block production eligibility
 
 ### Alternative Approaches Considered
 
@@ -1022,16 +1080,14 @@ BOOST_AUTO_TEST_CASE(nft_transfer_between_witnesses)
 
    push_transaction(bob_proof, bob_key);
 
-   // Verify Alice's proof invalidated
+   // Alice's proof still valid (before oracle verification)
    alice_proof_obj = proof_idx.find("alice");
    BOOST_REQUIRE(alice_proof_obj != proof_idx.end());
    BOOST_REQUIRE_EQUAL(alice_proof_obj->verification_status,
-                      witness_nft_proof_object::failed);
-   BOOST_REQUIRE(alice_proof_obj->verification_details.find("transferred to bob")
-                 != string::npos);
+                      witness_nft_proof_object::verified);
 
-   // Alice no longer eligible
-   BOOST_REQUIRE(!db->validate_witness_nft_ownership("alice"));
+   // Alice still has block production eligibility
+   BOOST_REQUIRE(db->validate_witness_nft_ownership("alice"));
 
    // Bob's proof pending
    auto bob_proof_obj = proof_idx.find("bob");
@@ -1042,14 +1098,23 @@ BOOST_AUTO_TEST_CASE(nft_transfer_between_witnesses)
    // Bob not yet eligible (pending oracle)
    BOOST_REQUIRE(!db->validate_witness_nft_ownership("bob"));
 
-   // Simulate oracle verification for Bob
+   // Simulate oracle verification for Bob (NFT transfer confirmed)
+   // When oracle confirms Bob as actual owner, Alice's proof is also invalidated
    db->modify(*bob_proof_obj, [&](witness_nft_proof_object& p) {
       p.verification_status = witness_nft_proof_object::verified;
       p.verification_details = "Oracle confirmed";
    });
 
-   // Bob now eligible
+   db->modify(*alice_proof_obj, [&](witness_nft_proof_object& p) {
+      p.verification_status = witness_nft_proof_object::failed;
+      p.verification_details = "NFT transferred to bob";
+   });
+
+   // Now Bob is eligible
    BOOST_REQUIRE(db->validate_witness_nft_ownership("bob"));
+
+   // Alice no longer eligible
+   BOOST_REQUIRE(!db->validate_witness_nft_ownership("alice"));
 }
 ```
 
@@ -1083,17 +1148,23 @@ BOOST_AUTO_TEST_CASE(false_nft_claim)
 
    push_transaction(fake_proof, malicious_key);
 
-   // Alice's proof invalidated (temporarily)
+   // Alice's proof still valid (DoS prevention)
    const auto& proof_idx = db->get_index<witness_nft_proof_index>()
                                .indices().get<by_witness>();
    auto alice_proof = proof_idx.find("alice");
    BOOST_REQUIRE_EQUAL(alice_proof->verification_status,
-                      witness_nft_proof_object::failed);
+                      witness_nft_proof_object::verified);
+
+   // Alice continues to have block production eligibility
+   BOOST_REQUIRE(db->validate_witness_nft_ownership("alice"));
 
    // Malicious proof pending
    auto mal_proof = proof_idx.find("malicious");
    BOOST_REQUIRE_EQUAL(mal_proof->verification_status,
                       witness_nft_proof_object::pending);
+
+   // Malicious witness not yet eligible (pending verification)
+   BOOST_REQUIRE(!db->validate_witness_nft_ownership("malicious"));
 
    // Simulate oracle verification - detects false claim
    db->modify(*mal_proof, [&](witness_nft_proof_object& p) {
@@ -1104,8 +1175,8 @@ BOOST_AUTO_TEST_CASE(false_nft_claim)
    // Malicious witness not eligible
    BOOST_REQUIRE(!db->validate_witness_nft_ownership("malicious"));
 
-   // Alice must re-submit proof to regain eligibility
-   BOOST_REQUIRE(!db->validate_witness_nft_ownership("alice"));
+   // Alice still has valid proof and block production eligibility
+   BOOST_REQUIRE(db->validate_witness_nft_ownership("alice"));
 }
 ```
 
@@ -1168,23 +1239,23 @@ Available in feature branch:
 
 **NFT Transfer Between Witnesses**
 - Risk: Witness sells NFT to another witness to circumvent limits
-- Behavior: Automatic invalidation of previous witness's proof
+- Behavior: Previous witness's proof invalidated after oracle verification
 - Impact:
-  - Previous witness loses eligibility immediately upon new claim
-  - New witness gains eligibility only after oracle verification
-  - Temporary gap where neither witness can produce blocks with that NFT
+  - Previous witness retains eligibility when new witness submits claim (DoS prevention)
+  - Previous witness invalidated only after oracle confirms actual transfer
+  - 1-2 minute delay until transfer confirmation
+  - Previous witness can produce blocks during this period (minimal security risk)
 - Protection: Oracle verification ensures legitimate ownership transfer
 
 **False NFT Claim Attacks**
 - Risk: Malicious witness claims another witness's NFT without owning it
 - Mitigation:
-  - Invalid proof will fail oracle verification
-  - Original witness's proof only invalidated after signature verification
+  - **DoS prevention**: Original witness's proof remains valid until oracle verification
+  - False claim will fail oracle verification
   - Attacker gains no benefit (oracle will reject fake claim)
+  - Original witness retains block production eligibility
   - Failed proof attempts are logged for monitoring
-- Trade-off: Brief window where original witness proof marked as failed
-  - Duration: Until oracle completes verification (~1-2 minutes)
-  - Impact: Minimal disruption to block production schedule
+- **Key improvement**: Malicious claims have no impact on legitimate witnesses
 
 **Witness Collusion**
 - Risk: Malicious witnesses approve fake collections
