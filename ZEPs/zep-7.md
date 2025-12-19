@@ -33,13 +33,11 @@ Zattera's current voting system has the following constraints:
 
 At 100% VP, a 100% weight vote consumes 0.5% VP. This causes:
 
-```
 Vote Weight | VP Consumed (calc) | VP Consumed (actual) | Rounding Effect
 ------------|-------------------|---------------------|----------------
 2%          | 0.01%             | 0.01%               | Accurate
 1%          | 0.005%            | 0.01%               | 2x overconsumption
 0.5%        | 0.0025%           | 0.01%               | 4x overconsumption
-```
 
 **Result**: All votes with 2% weight or less are treated the same as a 2% vote
 
@@ -58,13 +56,11 @@ In the current system with 2% weight votes only:
 
 For accounts with large ZP (Zattera Power) holdings:
 
-```
 Account ZP   | Min rshares | Min Valid Vote Weight
 -------------|-------------|---------------------
 1,000,000    | ~0          | 2% or higher needed
 10,000,000   | 1,000       | 1% possible
 1,000,000,000| 99,000      | 0.01% possible but still excessive
-```
 
 **Problems**:
 - Whales cannot give small rewards even when desired
@@ -255,38 +251,31 @@ FC_ASSERT(abs(weight) <= ZATTERA_100_PERCENT, "Weight is not a ZATTERA percentag
 
 **Scenario 1: Small Account (10M ZP)**
 
-```
 Vote Weight | VP Consumed | rshares | Validity
 ------------|-------------|---------|----------
 0.1%        | 2,000       | 0       | Invalid (dust)
 0.5%        | 10,000      | 0       | Invalid (dust)
 1%          | 20,000      | 1,000   | Valid ✓
-```
 
 **Scenario 2: Medium Account (100M ZP)**
 
-```
 Vote Weight | VP Consumed | rshares  | Validity
 ------------|-------------|----------|----------
 0.01%       | 200         | 0        | Invalid (dust)
 0.05%       | 1,000       | 0        | Invalid (dust)
 0.1%        | 2,000       | 1,000    | Valid ✓
 1%          | 20,000      | 19,000   | Valid ✓
-```
 
 **Scenario 3: Whale Account (1B ZP)**
 
-```
 Vote Weight | VP Consumed | rshares     | Validity
 ------------|-------------|-------------|----------
 0.01%       | 200         | 1,000       | Valid ✓
 0.1%        | 2,000       | 19,000      | Valid ✓
 1%          | 20,000      | 199,000     | Valid ✓
-```
 
 **Actual Daily Maximum Votes:**
 
-```
 Constraints:
 - VP Regeneration: 100% regenerates in 5 days
 - Time Constraint: Minimum 3-second interval (ZATTERA_MIN_VOTE_INTERVAL_SEC)
@@ -297,7 +286,6 @@ Vote Weight | VP-based Max | Time-based Max | Actual Max
 0.1%        | 50,000      | 28,800         | 28,800 (time-limited)
 1%          | 5,000       | 28,800         | 5,000 (VP-limited)
 2%          | 2,500       | 28,800         | 2,500 (VP-limited)
-```
 
 ## Rationale
 
@@ -875,45 +863,6 @@ Implementation code available in branch:
 - `src/core/chain/zattera_evaluator.cpp` - Calculation logic
 - `src/core/chain/database.cpp` - Hardfork migration
 - `tests/tests/voting_precision_tests.cpp` - Test cases
-
-**Testnet Deployment**:
-- Network: Zattera Testnet
-- Hardfork block: TBD
-- Validation period: Minimum 1 month
-
-## Implementation Timeline
-
-### Phase 0: Proposal and Discussion (2 weeks)
-- ZEP review
-- Community feedback
-- Technical validation
-
-### Phase 1: Development (4 weeks)
-- Core implementation
-- Test writing
-- Code review
-
-### Phase 2: Testnet (6 weeks)
-- Testnet deployment
-- Integration testing
-- Bug fixes
-
-### Phase 3: Mainnet Preparation (4 weeks)
-- Client notification
-- Documentation
-- Hardfork schedule confirmation
-
-### Phase 4: Hardfork (HF Day)
-- Node upgrades
-- Hardfork activation
-- Monitoring
-
-### Phase 5: Post-Management (2 weeks)
-- Performance monitoring
-- Bug response
-- Community support
-
-**Estimated Total Duration**: Approximately 4 months
 
 ## Future Improvements
 
