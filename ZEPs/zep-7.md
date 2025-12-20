@@ -742,8 +742,8 @@ BOOST_AUTO_TEST_CASE(whale_micro_voting)
    BOOST_REQUIRE(comment.net_rshares > 0);
 
    // Verify expected range
-   int64_t whale_vests = db->get_account("whale").vesting_shares.amount.value;
-   int64_t expected_rshares = whale_vests / 10000;  // 0.01%
+   int64_t whale_vests_balance = db->get_account("whale").vesting_share_balance.amount.value;
+   int64_t expected_rshares = whale_vests_balance / 10000;  // 0.01%
 
    BOOST_REQUIRE(comment.net_rshares < expected_rshares * 1.1);  // 10% margin
    BOOST_REQUIRE(comment.net_rshares > expected_rshares * 0.9);
