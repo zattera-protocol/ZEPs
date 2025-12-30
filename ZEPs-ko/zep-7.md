@@ -4,7 +4,7 @@ title: 투표 파워 정밀도 증가
 description: 투표 파워 필드를 uint16_t에서 uint32_t로 변경하고 정밀도를 10,000에서 100,000,000으로 증가
 author: Zattera Core Team
 discussions-to: TBD
-status: Draft
+status: Review
 type: Standards Track
 category: Core
 created: 2025-12-19

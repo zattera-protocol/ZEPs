@@ -4,7 +4,7 @@ title: Voting Power Precision Increase
 description: Change voting power field from uint16_t to uint32_t and increase precision from 10,000 to 100,000,000
 author: Zattera Core Team
 discussions-to: TBD
-status: Draft
+status: Review
 type: Standards Track
 category: Core
 created: 2025-12-19
